@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "fs";
+import { readdirSync, readFileSync, writeFileSync } from "fs";
 import { parse } from "../src/parse";
 
 describe("parse", () => {
@@ -7,9 +7,13 @@ describe("parse", () => {
     for (const file of files) {
       if (file.endsWith(".java")) {
         const source = readFileSync(`test/${file}`, "utf8");
-        const result = parse(source);
-        const json = readFileSync(`test/${file.slice(0, -5)}.json`, "utf8");
-        expect(result.json(2)).toEqual(json.trim());
+        const result = JSON.stringify(parse(source), undefined, 2) + "\n";
+        const output_file = `test/${file.slice(0, -5)}.json`;
+        const expected = readFileSync(output_file, "utf8");
+        if (result !== expected) {
+          writeFileSync(output_file, result, "utf8");
+          throw new Error("Result doesn't match expected output!");
+        }
       }
     }
   });

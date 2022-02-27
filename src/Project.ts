@@ -1,41 +1,70 @@
 import { ParserRuleContext } from "antlr4ts";
 import {
-  AnnotationContext,
   ClassDeclarationContext,
   CompilationUnitContext,
-  ElementValuePairContext,
   EnumConstantContext,
   EnumDeclarationContext,
   FieldDeclarationContext,
   FormalParameterContext,
   InterfaceDeclarationContext,
   MethodDeclarationContext,
-  TypeTypeContext,
-  TypeTypeOrVoidContext,
 } from "java-ast";
+import {
+  Annotation,
+  HasAnnotations,
+  HasName,
+  Model,
+  qualifiedName,
+} from "./common";
+import { parse } from "./parse";
+import { TypeReference } from "./Type";
 
-export class CompilationUnit implements HasContext {
+export class Project {
+  compilationUnits: CompilationUnit[];
+  typeCache: Record<string, DeclaredType>;
+
+  constructor() {
+    this.compilationUnits = [];
+    this.typeCache = {};
+  }
+
+  add(source: string) {
+    const compilationUnit = parse(source);
+    compilationUnit.project = this;
+    this.compilationUnits.push(compilationUnit);
+  }
+
+  findType(packageName: string | undefined, name: string) {
+    return this.typeCache[qualifiedName(packageName, name)];
+  }
+
+  toJSON() {
+    return { ...this, typeCache: undefined };
+  }
+}
+
+export class CompilationUnit extends Model {
   context: CompilationUnitContext;
+  project: Project;
   packageName?: string;
   imports: string[];
-  types: Type[];
+  types: DeclaredType[];
 
-  constructor(context: CompilationUnitContext, packageName?: string) {
+  constructor(
+    project: Project,
+    context: CompilationUnitContext,
+    packageName?: string
+  ) {
+    super();
+    this.project = project;
     this.context = context;
     this.packageName = packageName;
     this.types = [];
     this.imports = [];
   }
 
-  json(space?: number | string): string {
-    function replacer(key: string, value: unknown): unknown {
-      return key === "context" ? undefined : value;
-    }
-    return JSON.stringify(this, replacer, space);
-  }
-
-  visitTypes(callback: (type: Type) => void) {
-    function visit(type: Type) {
+  visitTypes(callback: (type: DeclaredType) => void) {
+    function visit(type: DeclaredType) {
       callback(type);
       for (const t of type.types) {
         visit(t);
@@ -49,35 +78,29 @@ export class CompilationUnit implements HasContext {
   findImport(name: string) {
     return this.imports.find((i) => i.endsWith(`.${name}`));
   }
+
+  toJSON() {
+    return { ...this, context: undefined, project: "*(<project>)" };
+  }
 }
 
-export interface HasContext {
-  context: ParserRuleContext;
+export interface HasParent {
+  parent: DeclaredType | CompilationUnit;
 }
 
-export interface HasName {
+/** Declared type, e.g. `class MyClass { ... }` */
+export abstract class DeclaredType
+  extends Model
+  implements HasName, HasAnnotations
+{
+  parent: CompilationUnit | DeclaredType;
   name: string;
-}
-
-export interface HasAnnotations {
-  annotations: Annotation[];
-}
-
-export type Expression =
-  | string
-  | number
-  | boolean
-  | null
-  | { expression: string };
-
-export abstract class Type implements HasContext, HasName, HasAnnotations {
-  abstract context: ParserRuleContext;
-  parent: CompilationUnit | Type;
-  name: string;
-  types: Type[];
+  /** Nested types */
+  types: DeclaredType[];
   annotations: Annotation[];
 
-  constructor(name: string, parent: CompilationUnit | Type) {
+  constructor(name: string, parent: CompilationUnit | DeclaredType) {
+    super();
     this.name = name;
     this.parent = parent;
     this.types = [];
@@ -95,6 +118,7 @@ export abstract class Type implements HasContext, HasName, HasAnnotations {
   toJSON() {
     return {
       ...this,
+      context: undefined,
       parent:
         this.parent instanceof CompilationUnit
           ? "*(<compilation unit>)"
@@ -103,7 +127,7 @@ export abstract class Type implements HasContext, HasName, HasAnnotations {
   }
 }
 
-export class Interface extends Type {
+export class Interface extends DeclaredType {
   context: InterfaceDeclarationContext;
   interfaces: TypeReference[];
   methods: Method[];
@@ -111,7 +135,7 @@ export class Interface extends Type {
   constructor(
     context: InterfaceDeclarationContext,
     name: string,
-    parent: CompilationUnit | Type
+    parent: CompilationUnit | DeclaredType
   ) {
     super(name, parent);
     this.context = context;
@@ -120,7 +144,7 @@ export class Interface extends Type {
   }
 }
 
-export class Class extends Type {
+export class Class extends DeclaredType {
   context: ClassDeclarationContext;
   superclass?: TypeReference;
   interfaces: TypeReference[];
@@ -130,7 +154,7 @@ export class Class extends Type {
   constructor(
     context: ClassDeclarationContext,
     name: string,
-    parent: CompilationUnit | Type
+    parent: CompilationUnit | DeclaredType
   ) {
     super(name, parent);
     this.context = context;
@@ -140,7 +164,7 @@ export class Class extends Type {
   }
 }
 
-export class Enum extends Type {
+export class Enum extends DeclaredType {
   context: EnumDeclarationContext;
   interfaces: TypeReference[];
   constants: EnumConstant[];
@@ -148,7 +172,7 @@ export class Enum extends Type {
   constructor(
     context: EnumDeclarationContext,
     name: string,
-    parent: CompilationUnit | Type
+    parent: CompilationUnit | DeclaredType
   ) {
     super(name, parent);
     this.context = context;
@@ -157,63 +181,28 @@ export class Enum extends Type {
   }
 }
 
-export class EnumConstant implements HasContext, HasName {
+export class EnumConstant extends Model implements HasName {
   context: EnumConstantContext;
   name: string;
 
   constructor(context: EnumConstantContext, name: string) {
+    super();
     this.context = context;
     this.name = name;
   }
 }
 
-export class Annotation implements HasName {
-  context: AnnotationContext;
-  name: string;
-  values: AnnotationValue[];
-
-  constructor(context: AnnotationContext, name: string) {
-    this.context = context;
-    this.name = name;
-    this.values = [];
-  }
-}
-
-export class AnnotationValue implements HasName {
-  name: string;
-  context: AnnotationContext | ElementValuePairContext;
-  value: Expression;
-
-  constructor(
-    name: string,
-    context: AnnotationContext | ElementValuePairContext,
-    value: Expression
-  ) {
-    this.name = name;
-    this.context = context;
-    this.value = value;
-  }
-}
-
-export abstract class TypeMember implements HasName, HasAnnotations {
+export abstract class TypeMember
+  extends Model
+  implements HasName, HasAnnotations
+{
   name: string;
   annotations: Annotation[];
 
   constructor(name: string) {
+    super();
     this.name = name;
     this.annotations = [];
-  }
-}
-
-export class TypeReference implements HasName {
-  context: TypeTypeContext | TypeTypeOrVoidContext;
-  name: string;
-  parameters: TypeReference[];
-
-  constructor(context: TypeTypeContext | TypeTypeOrVoidContext, name: string) {
-    this.context = context;
-    this.name = name;
-    this.parameters = [];
   }
 }
 
@@ -234,7 +223,7 @@ export class Method extends TypeMember {
   }
 }
 
-export class Parameter implements HasName, HasAnnotations {
+export class Parameter extends Model implements HasName, HasAnnotations {
   context: FormalParameterContext;
   name: string;
   type: TypeReference;
@@ -245,6 +234,7 @@ export class Parameter implements HasName, HasAnnotations {
     name: string,
     type: TypeReference
   ) {
+    super();
     this.context = context;
     this.name = name;
     this.type = type;
@@ -265,19 +255,4 @@ export class Field extends TypeMember {
     this.context = context;
     this.type = type;
   }
-}
-
-export function findObject<T extends HasName>(
-  arr: T[],
-  name: string
-): T | undefined {
-  return arr.find((obj) => obj.name === name);
-}
-
-export function requireObject<T extends HasName>(arr: T[], name: string): T {
-  const obj = findObject(arr, name);
-  if (obj == undefined) {
-    throw new Error(`Required object not found: ${name}`);
-  }
-  return obj;
 }

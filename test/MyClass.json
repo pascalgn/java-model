@@ -1,10 +1,31 @@
 {
+  "project": "*(<project>)",
   "packageName": "test",
   "types": [
     {
       "name": "MyClass",
       "parent": "*(<compilation unit>)",
-      "types": [],
+      "types": [
+        {
+          "name": "InnerClass1",
+          "parent": "*(MyClass)",
+          "types": [
+            {
+              "name": "InnerClass2",
+              "parent": "*(InnerClass1)",
+              "types": [],
+              "annotations": [],
+              "interfaces": [],
+              "methods": [],
+              "fields": []
+            }
+          ],
+          "annotations": [],
+          "interfaces": [],
+          "methods": [],
+          "fields": []
+        }
+      ],
       "annotations": [
         {
           "name": "ClassAnnotation1",
@@ -48,15 +69,24 @@
             }
           ],
           "returnType": {
-            "name": "Map<String,String>",
-            "parameters": []
+            "name": "Map",
+            "arguments": [
+              {
+                "name": "String",
+                "arguments": []
+              },
+              {
+                "name": "String",
+                "arguments": []
+              }
+            ]
           },
           "parameters": [
             {
               "name": "x",
               "type": {
                 "name": "int",
-                "parameters": []
+                "arguments": []
               },
               "annotations": []
             }
@@ -65,24 +95,25 @@
         {
           "name": "method2",
           "annotations": [],
-          "returnType": {
-            "name": "void",
-            "parameters": []
-          },
           "parameters": [
             {
               "name": "a",
               "type": {
                 "name": "String",
-                "parameters": []
+                "arguments": []
               },
               "annotations": []
             },
             {
               "name": "b",
               "type": {
-                "name": "List<String>",
-                "parameters": []
+                "name": "List",
+                "arguments": [
+                  {
+                    "name": "String",
+                    "arguments": []
+                  }
+                ]
               },
               "annotations": [
                 {
@@ -101,10 +132,92 @@
               ]
             }
           ]
+        },
+        {
+          "name": "method3",
+          "annotations": [],
+          "returnType": {
+            "name": "InnerClass2",
+            "arguments": [
+              {
+                "name": "Number",
+                "arguments": []
+              }
+            ],
+            "qualifier": {
+              "name": "InnerClass1",
+              "arguments": [
+                {
+                  "name": "String",
+                  "arguments": []
+                }
+              ]
+            }
+          },
+          "parameters": []
         }
       ],
-      "fields": []
+      "fields": [
+        {
+          "name": "field1",
+          "annotations": [],
+          "type": {
+            "name": "List",
+            "arguments": [
+              {
+                "name": "Map",
+                "arguments": [
+                  {
+                    "name": "Set",
+                    "arguments": [
+                      {
+                        "name": "Integer",
+                        "arguments": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "List",
+                    "arguments": [
+                      {
+                        "name": "Double",
+                        "arguments": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "field2",
+          "annotations": [],
+          "type": {
+            "name": "Set",
+            "arguments": [
+              {
+                "name": "?",
+                "constraint": {
+                  "kind": "extends",
+                  "type": {
+                    "name": "List",
+                    "arguments": [
+                      {
+                        "name": "?"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
     }
   ],
-  "imports": []
+  "imports": [
+    "java.util.Map",
+    "test.annotate.*"
+  ]
 }
