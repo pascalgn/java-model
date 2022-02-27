@@ -1,0 +1,110 @@
+{
+  "packageName": "test",
+  "types": [
+    {
+      "name": "MyClass",
+      "parent": "*(<compilation unit>)",
+      "types": [],
+      "annotations": [
+        {
+          "name": "ClassAnnotation1",
+          "values": [
+            {
+              "name": "value",
+              "value": "hello"
+            }
+          ]
+        },
+        {
+          "name": "ClassAnnotation2",
+          "values": [
+            {
+              "name": "value",
+              "value": 1
+            },
+            {
+              "name": "text",
+              "value": {
+                "expression": "\"\"+\"\""
+              }
+            },
+            {
+              "name": "obj",
+              "value": {
+                "expression": "@Complex()"
+              }
+            }
+          ]
+        }
+      ],
+      "interfaces": [],
+      "methods": [
+        {
+          "name": "method1",
+          "annotations": [
+            {
+              "name": "Annotation1",
+              "values": []
+            }
+          ],
+          "returnType": {
+            "name": "Map<String,String>",
+            "parameters": []
+          },
+          "parameters": [
+            {
+              "name": "x",
+              "type": {
+                "name": "int",
+                "parameters": []
+              },
+              "annotations": []
+            }
+          ]
+        },
+        {
+          "name": "method2",
+          "annotations": [],
+          "returnType": {
+            "name": "void",
+            "parameters": []
+          },
+          "parameters": [
+            {
+              "name": "a",
+              "type": {
+                "name": "String",
+                "parameters": []
+              },
+              "annotations": []
+            },
+            {
+              "name": "b",
+              "type": {
+                "name": "List<String>",
+                "parameters": []
+              },
+              "annotations": [
+                {
+                  "name": "A",
+                  "values": []
+                },
+                {
+                  "name": "B",
+                  "values": [
+                    {
+                      "name": "value",
+                      "value": 1
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "fields": []
+    }
+  ],
+  "imports": []
+}
