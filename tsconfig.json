@@ -1,11 +1,13 @@
 {
   "compilerOptions": {
-    "target": "es2016",
-    "module": "commonjs",
+    "target": "es6",
+    "module": "CommonJS",
     "esModuleInterop": true,
+    "lib": ["es6"],
     "strict": true,
+    "isolatedModules": true,
     "skipLibCheck": true,
-    "noEmit": true,
-    "declaration": true
-  }
+    "noEmit": true
+  },
+  "include": ["index.ts", "src", "test"]
 }
