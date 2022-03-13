@@ -1,15 +1,4 @@
-import { ParserRuleContext } from "antlr4ts";
-import { AnnotationContext, ElementValuePairContext } from "java-ast";
-
-export abstract class Model {
-  abstract context: ParserRuleContext;
-
-  toJSON() {
-    return { ...this, context: undefined };
-  }
-}
-
-export interface HasName {
+interface HasName {
   name: string;
 }
 
@@ -28,13 +17,34 @@ export function requireObject<T extends HasName>(arr: T[], name: string): T {
   return obj;
 }
 
-export function qualifiedName(packageName: string | undefined, name: string) {
-  return packageName == undefined ? name : `${packageName}.${name}`;
+export function qualifiedName(qualifier: string | undefined, name: string) {
+  return qualifier == undefined ? name : `${qualifier}.${name}`;
 }
 
-export interface HasAnnotations {
-  annotations: Annotation[];
+export function simpleName(qualifiedName: string) {
+  const idx = qualifiedName.lastIndexOf(".");
+  return idx === -1 ? qualifiedName : qualifiedName.slice(idx + 1);
 }
+
+export function splitName(name: string): { qualifier?: string; name: string } {
+  const idx = name.indexOf(".");
+  return idx === -1
+    ? { name }
+    : { qualifier: name.slice(0, idx), name: name.slice(idx + 1) };
+}
+
+export type Modifier =
+  | "public"
+  | "protected"
+  | "private"
+  | "abstract"
+  | "static"
+  | "final"
+  | "transient"
+  | "volatile"
+  | "synchronized"
+  | "native"
+  | "strictfp";
 
 export type Expression =
   | string
@@ -42,33 +52,3 @@ export type Expression =
   | boolean
   | null
   | { expression: string };
-
-export class Annotation extends Model implements HasName {
-  context: AnnotationContext;
-  name: string;
-  values: AnnotationValue[];
-
-  constructor(context: AnnotationContext, name: string) {
-    super();
-    this.context = context;
-    this.name = name;
-    this.values = [];
-  }
-}
-
-export class AnnotationValue extends Model implements HasName {
-  name: string;
-  context: AnnotationContext | ElementValuePairContext;
-  value: Expression;
-
-  constructor(
-    name: string,
-    context: AnnotationContext | ElementValuePairContext,
-    value: Expression
-  ) {
-    super();
-    this.name = name;
-    this.context = context;
-    this.value = value;
-  }
-}

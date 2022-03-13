@@ -6,6 +6,8 @@ import {
   TypeArgumentsContext,
   TypeTypeContext,
   TypeTypeOrVoidContext,
+  ConcreteVisitor,
+  TypeListContext,
 } from "java-ast";
 import { JavaLexer } from "java-ast/dist/parser/JavaLexer";
 import { AbstractParseTreeVisitor } from "antlr4ts/tree/AbstractParseTreeVisitor";
@@ -13,30 +15,141 @@ import { ParserRuleContext } from "antlr4ts";
 import { ParseTree } from "antlr4ts/tree/ParseTree";
 import { RuleNode } from "antlr4ts/tree/RuleNode";
 import { TerminalNode } from "antlr4ts/tree/TerminalNode";
-import {
-  DeclaredTypeReference,
-  ExternalTypeReference,
-  TypeArgument,
-  TypeReference,
-  Wildcard,
-} from "./Type";
-import { AnnotationValue, Expression } from "./common";
+import { Expression, Modifier } from "./common";
 import {
   Class,
   CompilationUnit,
-  DeclaredType,
+  Constructor,
+  TypeDeclaration,
   Field,
+  HasParameters,
   Interface,
   Method,
   Parameter,
   Project,
+  TypeParameter,
+  Enum,
+  TypeArgument,
+  ArrayType,
+  ObjectType,
+  Type,
+  Wildcard,
+  TypeContainer,
+  Model,
+  Annotation,
+  AnnotationValue,
+  AnnotationDeclaration,
+  NormalTypeDeclaration,
 } from "./Project";
-import { Annotation } from "./common";
+import { PrimitiveType } from "./PrimitiveType";
 
-export function parse(source: string): CompilationUnit {
+type Sync = { files: string[]; read: (file: string) => string };
+type Async = { files: string[]; readAsync: (file: string) => Promise<string> };
+
+export function parse(sources: string[]): Project;
+export function parse(input: Sync): Project;
+export function parse(input: Async): Promise<Project>;
+export function parse(
+  input: string[] | Sync | Async
+): Project | Promise<Project> {
+  if (Array.isArray(input)) {
+    return new Project(input.map((source) => parseFile(source)));
+  } else if ("readAsync" in input) {
+    return parseAsync(input);
+  } else {
+    return parseSync(input);
+  }
+}
+
+function parseSync(input: Sync) {
+  return new Project(
+    input.files.map((file) => {
+      let source;
+      try {
+        source = input.read(file);
+      } catch (e) {
+        errorRead(file, e);
+      }
+      try {
+        return parseFile(source);
+      } catch (e) {
+        errorParse(file, e);
+      }
+    })
+  );
+}
+
+async function parseAsync(input: Async) {
+  const compilationUnits: CompilationUnit[] = [];
+  for (const file of input.files) {
+    let source;
+    try {
+      source = await input.readAsync(file);
+    } catch (e) {
+      errorRead(file, e);
+    }
+    try {
+      compilationUnits.push(parseFile(source));
+    } catch (e) {
+      errorParse(file, e);
+    }
+  }
+  return new Project(compilationUnits);
+}
+
+function errorRead(file: string, e: any): never {
+  e.message = `could not read file '${file}': ${e.message}`;
+  throw e;
+}
+
+function errorParse(file: string, e: any): never {
+  e.message = `could not parse file '${file}': ${e.message}`;
+  throw e;
+}
+
+function parseFile(source: string): CompilationUnit {
+  const dummyProject = {} as Project;
+  const dummyParent = {} as Model;
+
   let compilationUnit: CompilationUnit | undefined;
-  let type: DeclaredType | undefined;
+  let modifiers: Modifier[] = [];
+  let type: TypeDeclaration | undefined;
+  let typeParameter: TypeParameter | undefined;
   let annotations: Annotation[] = [];
+  let hasParameters: HasParameters | undefined;
+
+  function addModifier(node: unknown, modifier: Modifier) {
+    if (node != undefined) {
+      modifiers.push(modifier);
+    }
+  }
+
+  function moveModifiers(obj: { modifiers: Modifier[] }) {
+    obj.modifiers = modifiers;
+    modifiers = [];
+  }
+
+  function moveAnnotations(obj: Model & { annotations: Annotation[] }) {
+    obj.annotations = annotations;
+    for (const annotation of obj.annotations) {
+      annotation.parent = obj;
+    }
+    annotations = [];
+  }
+
+  function setSuperclass(parent?: TypeDeclaration, ctx?: TypeTypeContext) {
+    if (type instanceof Class && ctx != undefined) {
+      type.superclass = parseObjectType(parent ?? compilationUnit!, ctx);
+    }
+  }
+
+  function addInterfaces(parent?: TypeDeclaration, ctx?: TypeListContext) {
+    if (type instanceof NormalTypeDeclaration && ctx != undefined) {
+      type.interfaces = ctx
+        .typeType()
+        .map((t) => parseObjectType(parent ?? compilationUnit!, t));
+    }
+  }
 
   const visitor = createVisitor({
     visitCompilationUnit(ctx) {
@@ -47,29 +160,106 @@ export function parse(source: string): CompilationUnit {
       compilationUnit!.packageName = ctx.qualifiedName().text;
     },
     visitImportDeclaration(ctx) {
-      const importName =
-        ctx.qualifiedName().text + (ctx.MUL() == undefined ? "" : ".*");
-      compilationUnit!.imports.push(importName);
+      if (ctx.STATIC() == undefined) {
+        const importName =
+          ctx.qualifiedName().text + (ctx.MUL() == undefined ? "" : ".*");
+        compilationUnit!.imports.push(importName);
+      }
+    },
+    visitModifier(ctx) {
+      addModifier(ctx.NATIVE(), "native");
+      addModifier(ctx.SYNCHRONIZED(), "synchronized");
+      addModifier(ctx.TRANSIENT(), "transient");
+      addModifier(ctx.VOLATILE(), "volatile");
+      visitor.visitChildren(ctx);
+    },
+    visitClassOrInterfaceModifier(ctx) {
+      addModifier(ctx.ABSTRACT(), "abstract");
+      addModifier(ctx.FINAL(), "final");
+      addModifier(ctx.PRIVATE(), "private");
+      addModifier(ctx.PROTECTED(), "protected");
+      addModifier(ctx.PUBLIC(), "public");
+      addModifier(ctx.STATIC(), "static");
+      addModifier(ctx.STRICTFP(), "strictfp");
+      visitor.visitChildren(ctx);
     },
     visitClassDeclaration(ctx) {
       let previousType = type;
       const parent = previousType ?? compilationUnit!;
-      type = new Class(ctx, ctx.IDENTIFIER().text, parent);
-      type.annotations = annotations;
-      annotations = [];
-      (previousType?.types ?? compilationUnit!.types).push(type);
+      type = new Class(parent, ctx, ctx.IDENTIFIER().text);
+      moveModifiers(type);
+      moveAnnotations(type);
+      parent.types.push(type);
+      setSuperclass(previousType, ctx.typeType());
+      addInterfaces(previousType, ctx.typeList());
       visitor.visitChildren(ctx);
       type = previousType;
     },
+    visitAnnotationTypeDeclaration(ctx) {
+      let previousType = type;
+      const parent = previousType ?? compilationUnit!;
+      type = new AnnotationDeclaration(parent, ctx, ctx.IDENTIFIER().text);
+      moveModifiers(type);
+      moveAnnotations(type);
+      parent.types.push(type);
+      visitor.visitChildren(ctx);
+      type = previousType;
+    },
+    visitInterfaceDeclaration(ctx) {
+      let previousType = type;
+      const parent = previousType ?? compilationUnit!;
+      type = new Interface(parent, ctx, ctx.IDENTIFIER().text);
+      moveModifiers(type);
+      moveAnnotations(type);
+      parent.types.push(type);
+      addInterfaces(previousType, ctx.typeList());
+      visitor.visitChildren(ctx);
+      type = previousType;
+    },
+    visitEnumDeclaration(ctx) {
+      let previousType = type;
+      const parent = previousType ?? compilationUnit!;
+      type = new Enum(parent, ctx, ctx.IDENTIFIER().text);
+      moveModifiers(type);
+      moveAnnotations(type);
+      parent.types.push(type);
+      addInterfaces(previousType, ctx.typeList());
+      visitor.visitChildren(ctx);
+      type = previousType;
+    },
+    visitTypeParameter(ctx) {
+      typeParameter = new TypeParameter(type!, ctx, ctx.IDENTIFIER().text);
+      visitor.visitChildren(ctx);
+      if (type instanceof NormalTypeDeclaration) {
+        type.parameters.push(typeParameter);
+      }
+    },
+    visitTypeBound(ctx) {
+      if (typeParameter != undefined) {
+        for (const t of ctx.typeType()) {
+          typeParameter.constraints.push(parseObjectType(type!, t));
+        }
+      }
+    },
     visitAnnotation(ctx) {
       const annotation = new Annotation(
+        dummyParent,
         ctx,
-        ctx.qualifiedName().IDENTIFIER(0).text
+        ctx
+          .qualifiedName()
+          .IDENTIFIER()
+          .map((id) => id.text)
+          .join(".")
       );
       annotations.push(annotation);
       if (ctx.elementValue() != undefined) {
         annotation.values.push(
-          new AnnotationValue("value", ctx, expression(ctx.elementValue()!))
+          new AnnotationValue(
+            annotation,
+            ctx,
+            "value",
+            expression(ctx.elementValue()!)
+          )
         );
       }
       visitor.visitChildren(ctx);
@@ -78,8 +268,9 @@ export function parse(source: string): CompilationUnit {
       const annotation = annotations[annotations.length - 1];
       annotation.values.push(
         new AnnotationValue(
-          ctx.IDENTIFIER().text,
+          annotation,
           ctx,
+          ctx.IDENTIFIER().text,
           expression(ctx.elementValue())
         )
       );
@@ -87,36 +278,56 @@ export function parse(source: string): CompilationUnit {
     visitMethodDeclaration(ctx) {
       const methodName = ctx.IDENTIFIER().text;
       const returnType = ctx.typeTypeOrVoid();
-      const method = new Method(ctx, methodName, typeReference(returnType));
-      method.annotations = annotations;
-      annotations = [];
+      const method = new Method(
+        type!,
+        ctx,
+        methodName,
+        parseType(type!, returnType)
+      );
+      moveModifiers(method);
+      moveAnnotations(method);
       if (type instanceof Class || type instanceof Interface) {
         type.methods.push(method);
       }
+      hasParameters = method;
+      visitor.visitChildren(ctx);
+    },
+    visitConstructorDeclaration(ctx) {
+      const constructor = new Constructor(type!, ctx);
+      moveModifiers(constructor);
+      moveAnnotations(constructor);
+      if (type instanceof Class) {
+        type.constructors.push(constructor);
+      }
+      hasParameters = constructor;
       visitor.visitChildren(ctx);
     },
     visitFieldDeclaration(ctx) {
       if (type instanceof Class) {
-        const fieldType = typeReference(ctx.typeType());
+        const fieldType = parseType(type, ctx.typeType());
         for (const variable of ctx.variableDeclarators().variableDeclarator()) {
           const name = variable.variableDeclaratorId().IDENTIFIER().text;
-          type.fields.push(new Field(ctx, name, fieldType));
+          const field = new Field(type, ctx, name, fieldType);
+          field.modifiers = [...modifiers];
+          copyAnnotationsTo(annotations, field);
+          type.fields.push(field);
         }
       }
+      modifiers = [];
+      annotations = [];
     },
     visitTypeType() {},
     visitFormalParameter(ctx) {
       visitor.visitChildren(ctx);
-      if (type instanceof Class || type instanceof Interface) {
-        const method = type.methods[type.methods.length - 1];
+      if (hasParameters != undefined) {
         const parameter = new Parameter(
+          hasParameters as Method | Constructor,
           ctx,
           ctx.variableDeclaratorId().text,
-          typeReference(ctx.typeType())
+          parseType(type!, ctx.typeType())
         );
-        parameter.annotations = annotations;
-        annotations = [];
-        method.parameters.push(parameter);
+        moveAnnotations(parameter);
+        hasParameters.parameters.push(parameter);
       }
     },
   });
@@ -126,8 +337,6 @@ export function parse(source: string): CompilationUnit {
 
   return compilationUnit!;
 }
-
-const dummyProject = new Project();
 
 function expression(ctx: ParserRuleContext): Expression {
   const nodes: ParseTree[] = [];
@@ -147,61 +356,107 @@ function expression(ctx: ParserRuleContext): Expression {
   }
 }
 
-function typeReference(
+function copyAnnotationsTo(annotations: Annotation[], target: Field) {
+  target.annotations = annotations.map((a) => {
+    const copy = new Annotation(target, a.context, a.name);
+    copy.values = a.values.map(
+      (v) => new AnnotationValue(copy, v.context, v.name, v.value)
+    );
+    return copy;
+  });
+}
+
+function parseType(
+  container: TypeContainer,
   ctx: TypeTypeContext | TypeTypeOrVoidContext
-): TypeReference {
-  const visitor = createVisitor<TypeReference | undefined>({
-    defaultResult() {
-      return undefined;
+): Type {
+  let result: Type | undefined;
+  const visitor: ConcreteVisitor<void> = createVisitor({
+    visitTypeType(ctx) {
+      visitor.visitChildren(ctx);
+      if (ctx.LBRACK().length > 0) {
+        if (result instanceof ArrayType || result == undefined) {
+          throw new Error("invalid type!");
+        } else {
+          result = new ArrayType(result, ctx.LBRACK().length);
+        }
+      }
     },
-    aggregateResult(cur, next) {
-      if (cur == undefined) {
-        return next;
+    visitTypeTypeOrVoid(ctx) {
+      if (ctx.VOID() == undefined) {
+        visitor.visitChildren(ctx);
       } else {
-        throw new Error(`Unexpected argument: ${cur}`);
+        result = PrimitiveType.VOID;
       }
     },
     visitClassOrInterfaceType(ctx) {
-      let ref: DeclaredTypeReference | undefined;
+      let type: ObjectType | undefined;
       for (let i = 0; i < ctx.childCount; i++) {
         const child = ctx.getChild(i);
         if (child instanceof TerminalNode) {
           if (child.symbol.type === JavaLexer.IDENTIFIER) {
-            if (ref == undefined) {
-              ref = new DeclaredTypeReference(child.text);
+            if (type == undefined) {
+              type = new ObjectType(container, child.text);
             } else {
-              const qualifier = ref;
-              ref = new DeclaredTypeReference(child.text);
-              ref.qualifier = qualifier;
+              const qualifier = type;
+              type = new ObjectType(container, child.text);
+              type.qualifier = qualifier;
             }
           }
         } else if (child instanceof TypeArgumentsContext) {
-          ref!.arguments = child.typeArgument().map(typeArgument);
+          type!.arguments = child
+            .typeArgument()
+            .map((arg) => parseTypeArgument(container, arg));
         }
       }
-      return ref!;
+      result = type;
     },
     visitPrimitiveType(ctx) {
-      return new ExternalTypeReference(ctx.text);
+      result = new PrimitiveType(ctx.text);
     },
   });
-  return ctx.accept(visitor)!;
+  ctx.accept(visitor);
+  if (result == undefined) {
+    throw new Error("Failed to create reference");
+  } else {
+    return result;
+  }
 }
 
-function typeArgument(ctx: TypeArgumentContext): TypeArgument {
+function parseObjectType(
+  container: TypeContainer,
+  ctx: TypeTypeContext | TypeTypeOrVoidContext
+): ObjectType {
+  const ref = parseType(container, ctx);
+  if (ref instanceof ObjectType) {
+    return ref;
+  } else {
+    throw new Error(`Invalid type, expected class: ${JSON.stringify(ref)}`);
+  }
+}
+
+function parseTypeArgument(
+  container: TypeContainer,
+  ctx: TypeArgumentContext
+): TypeArgument {
   if (ctx.QUESTION() == undefined) {
-    return typeReference(ctx.typeType()!);
+    const ref = parseType(container, ctx.typeType()!);
+    if (ref instanceof ObjectType || ref instanceof ArrayType) {
+      return ref;
+    } else {
+      throw new Error(`Invalid type argument: ${JSON.stringify(ref)}`);
+    }
   } else {
     const ref = new Wildcard();
     if (ctx.EXTENDS() != undefined) {
       ref.constraint = {
         kind: "extends",
-        type: typeReference(ctx.typeType()!),
+        type: parseObjectType(container, ctx.typeType()!),
       };
     } else if (ctx.SUPER() != undefined) {
       ref.constraint = {
         kind: "super",
-        type: typeReference(ctx.typeType()!),
+        type: parseObjectType(container, ctx.typeType()!),
       };
     }
     return ref;
