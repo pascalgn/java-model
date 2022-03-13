@@ -1,30 +1,10 @@
 {
-  "project": "*(<project>)",
   "packageName": "test",
   "types": [
     {
       "name": "MyClass",
-      "parent": "*(<compilation unit>)",
-      "types": [
-        {
-          "name": "InnerClass1",
-          "parent": "*(MyClass)",
-          "types": [
-            {
-              "name": "InnerClass2",
-              "parent": "*(InnerClass1)",
-              "types": [],
-              "annotations": [],
-              "interfaces": [],
-              "methods": [],
-              "fields": []
-            }
-          ],
-          "annotations": [],
-          "interfaces": [],
-          "methods": [],
-          "fields": []
-        }
+      "modifiers": [
+        "abstract"
       ],
       "annotations": [
         {
@@ -58,17 +38,97 @@
           ]
         }
       ],
+      "types": [
+        {
+          "name": "Annotation1",
+          "modifiers": [],
+          "annotations": [],
+          "types": []
+        },
+        {
+          "name": "InnerClass1",
+          "modifiers": [
+            "protected"
+          ],
+          "annotations": [],
+          "types": [
+            {
+              "name": "InnerClass2",
+              "modifiers": [],
+              "annotations": [],
+              "types": [],
+              "parameters": [
+                {
+                  "name": "T2",
+                  "constraints": [
+                    {
+                      "name": "T1",
+                      "arguments": []
+                    },
+                    {
+                      "name": "Serializable",
+                      "arguments": []
+                    }
+                  ]
+                }
+              ],
+              "interfaces": [],
+              "methods": [],
+              "constructors": [],
+              "fields": [
+                {
+                  "name": "field2",
+                  "modifiers": [
+                    "private"
+                  ],
+                  "annotations": [],
+                  "type": {
+                    "name": "T2",
+                    "arguments": []
+                  }
+                }
+              ]
+            }
+          ],
+          "parameters": [
+            {
+              "name": "T1",
+              "constraints": []
+            }
+          ],
+          "interfaces": [],
+          "methods": [],
+          "constructors": [],
+          "fields": [
+            {
+              "name": "field1",
+              "modifiers": [
+                "private"
+              ],
+              "annotations": [],
+              "type": {
+                "name": "T1",
+                "arguments": []
+              }
+            }
+          ]
+        }
+      ],
+      "parameters": [],
       "interfaces": [],
       "methods": [
         {
           "name": "method1",
+          "modifiers": [
+            "abstract"
+          ],
           "annotations": [
             {
               "name": "Annotation1",
               "values": []
             }
           ],
-          "returnType": {
+          "type": {
             "name": "Map",
             "arguments": [
               {
@@ -85,8 +145,7 @@
             {
               "name": "x",
               "type": {
-                "name": "int",
-                "arguments": []
+                "name": "int"
               },
               "annotations": []
             }
@@ -94,7 +153,13 @@
         },
         {
           "name": "method2",
+          "modifiers": [
+            "abstract"
+          ],
           "annotations": [],
+          "type": {
+            "name": "void"
+          },
           "parameters": [
             {
               "name": "a",
@@ -135,8 +200,11 @@
         },
         {
           "name": "method3",
+          "modifiers": [
+            "abstract"
+          ],
           "annotations": [],
-          "returnType": {
+          "type": {
             "name": "InnerClass2",
             "arguments": [
               {
@@ -157,9 +225,14 @@
           "parameters": []
         }
       ],
+      "constructors": [],
       "fields": [
         {
           "name": "field1",
+          "modifiers": [
+            "private",
+            "final"
+          ],
           "annotations": [],
           "type": {
             "name": "List",
@@ -192,6 +265,9 @@
         },
         {
           "name": "field2",
+          "modifiers": [
+            "private"
+          ],
           "annotations": [],
           "type": {
             "name": "Set",

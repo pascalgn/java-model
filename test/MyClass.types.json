@@ -1,0 +1,42 @@
+{
+  "Map": {
+    "name": "java.util.Map"
+  },
+  "InnerClass2": {
+    "name": "InnerClass2",
+    "modifiers": [],
+    "annotations": [],
+    "types": [],
+    "parameters": [
+      {
+        "name": "T2",
+        "constraints": [
+          {
+            "name": "T1",
+            "arguments": []
+          },
+          {
+            "name": "Serializable",
+            "arguments": []
+          }
+        ]
+      }
+    ],
+    "interfaces": [],
+    "methods": [],
+    "constructors": [],
+    "fields": [
+      {
+        "name": "field2",
+        "modifiers": [
+          "private"
+        ],
+        "annotations": [],
+        "type": {
+          "name": "T2",
+          "arguments": []
+        }
+      }
+    ]
+  }
+}
