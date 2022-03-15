@@ -45,10 +45,3 @@ export type Modifier =
   | "synchronized"
   | "native"
   | "strictfp";
-
-export type Expression =
-  | string
-  | number
-  | boolean
-  | null
-  | { expression: string };

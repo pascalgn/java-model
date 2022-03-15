@@ -3,116 +3,45 @@
   "types": [
     {
       "name": "MyClass",
-      "modifiers": [
-        "abstract"
-      ],
       "annotations": [
         {
-          "name": "ClassAnnotation1",
+          "qualifiedName": "ClassAnnotation1",
           "values": [
             {
               "name": "value",
-              "value": "hello"
+              "value": {
+                "value": "hello"
+              }
             }
           ]
         },
         {
-          "name": "ClassAnnotation2",
+          "qualifiedName": "ClassAnnotation2",
           "values": [
             {
               "name": "value",
-              "value": 1
+              "value": {
+                "value": 1
+              }
             },
             {
               "name": "text",
               "value": {
-                "expression": "\"\"+\"\""
+                "value": ""
               }
             },
             {
               "name": "obj",
               "value": {
-                "expression": "@Complex()"
+                "qualifiedName": "Complex",
+                "values": []
               }
             }
           ]
         }
       ],
-      "types": [
-        {
-          "name": "Annotation1",
-          "modifiers": [],
-          "annotations": [],
-          "types": []
-        },
-        {
-          "name": "InnerClass1",
-          "modifiers": [
-            "protected"
-          ],
-          "annotations": [],
-          "types": [
-            {
-              "name": "InnerClass2",
-              "modifiers": [],
-              "annotations": [],
-              "types": [],
-              "parameters": [
-                {
-                  "name": "T2",
-                  "constraints": [
-                    {
-                      "name": "T1",
-                      "arguments": []
-                    },
-                    {
-                      "name": "Serializable",
-                      "arguments": []
-                    }
-                  ]
-                }
-              ],
-              "interfaces": [],
-              "methods": [],
-              "constructors": [],
-              "fields": [
-                {
-                  "name": "field2",
-                  "modifiers": [
-                    "private"
-                  ],
-                  "annotations": [],
-                  "type": {
-                    "name": "T2",
-                    "arguments": []
-                  }
-                }
-              ]
-            }
-          ],
-          "parameters": [
-            {
-              "name": "T1",
-              "constraints": []
-            }
-          ],
-          "interfaces": [],
-          "methods": [],
-          "constructors": [],
-          "fields": [
-            {
-              "name": "field1",
-              "modifiers": [
-                "private"
-              ],
-              "annotations": [],
-              "type": {
-                "name": "T1",
-                "arguments": []
-              }
-            }
-          ]
-        }
+      "modifiers": [
+        "abstract"
       ],
       "parameters": [],
       "interfaces": [],
@@ -124,7 +53,7 @@
           ],
           "annotations": [
             {
-              "name": "Annotation1",
+              "qualifiedName": "Annotation1",
               "values": []
             }
           ],
@@ -156,7 +85,34 @@
           "modifiers": [
             "abstract"
           ],
-          "annotations": [],
+          "annotations": [
+            {
+              "qualifiedName": "Annotation2",
+              "values": [
+                {
+                  "name": "test",
+                  "value": {
+                    "qualifiedName": "Annotation3",
+                    "values": [
+                      {
+                        "name": "value",
+                        "value": {
+                          "expressions": [
+                            {
+                              "value": 123
+                            },
+                            {
+                              "value": 456
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
           "type": {
             "name": "void"
           },
@@ -182,15 +138,17 @@
               },
               "annotations": [
                 {
-                  "name": "A",
+                  "qualifiedName": "A",
                   "values": []
                 },
                 {
-                  "name": "B",
+                  "qualifiedName": "B",
                   "values": [
                     {
                       "name": "value",
-                      "value": 1
+                      "value": {
+                        "value": 1
+                      }
                     }
                   ]
                 }
@@ -223,6 +181,85 @@
             }
           },
           "parameters": []
+        }
+      ],
+      "types": [
+        {
+          "name": "Annotation1",
+          "annotations": [],
+          "modifiers": [],
+          "parameters": [],
+          "interfaces": [],
+          "methods": [],
+          "types": []
+        },
+        {
+          "name": "InnerClass1",
+          "annotations": [],
+          "modifiers": [
+            "protected"
+          ],
+          "parameters": [
+            {
+              "name": "T1",
+              "constraints": []
+            }
+          ],
+          "interfaces": [],
+          "methods": [],
+          "types": [
+            {
+              "name": "InnerClass2",
+              "annotations": [],
+              "modifiers": [],
+              "parameters": [
+                {
+                  "name": "T2",
+                  "constraints": [
+                    {
+                      "name": "T1",
+                      "arguments": []
+                    },
+                    {
+                      "name": "Serializable",
+                      "arguments": []
+                    }
+                  ]
+                }
+              ],
+              "interfaces": [],
+              "methods": [],
+              "types": [],
+              "constructors": [],
+              "fields": [
+                {
+                  "name": "field2",
+                  "modifiers": [
+                    "private"
+                  ],
+                  "annotations": [],
+                  "type": {
+                    "name": "T2",
+                    "arguments": []
+                  }
+                }
+              ]
+            }
+          ],
+          "constructors": [],
+          "fields": [
+            {
+              "name": "field1",
+              "modifiers": [
+                "private"
+              ],
+              "annotations": [],
+              "type": {
+                "name": "T1",
+                "arguments": []
+              }
+            }
+          ]
         }
       ],
       "constructors": [],
@@ -287,6 +324,87 @@
                 }
               }
             ]
+          },
+          "initializer": {
+            "target": {
+              "name": "HashSet",
+              "arguments": [],
+              "qualifier": {
+                "name": "util",
+                "arguments": [],
+                "qualifier": {
+                  "name": "java",
+                  "arguments": []
+                }
+              }
+            },
+            "arguments": [
+              {
+                "value": 100
+              },
+              {
+                "value": 0.5
+              }
+            ]
+          }
+        },
+        {
+          "name": "field3a",
+          "modifiers": [
+            "private"
+          ],
+          "annotations": [],
+          "type": {
+            "component": {
+              "name": "long"
+            },
+            "dimension": 2
+          }
+        },
+        {
+          "name": "field3b",
+          "modifiers": [
+            "private"
+          ],
+          "annotations": [],
+          "type": {
+            "component": {
+              "name": "Long",
+              "arguments": []
+            },
+            "dimension": 2
+          }
+        },
+        {
+          "name": "field4",
+          "modifiers": [
+            "private"
+          ],
+          "annotations": [],
+          "type": {
+            "component": {
+              "name": "List",
+              "arguments": [
+                {
+                  "name": "String",
+                  "arguments": []
+                }
+              ]
+            },
+            "dimension": 2
+          }
+        },
+        {
+          "name": "field5",
+          "modifiers": [
+            "private"
+          ],
+          "annotations": [],
+          "type": {
+            "name": "int"
+          },
+          "initializer": {
+            "value": -256
           }
         }
       ]

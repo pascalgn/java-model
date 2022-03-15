@@ -1,3 +1,4 @@
+import { simpleName } from "./common";
 import { PrimitiveType } from "./PrimitiveType";
 
 const BOX_TYPES = {
@@ -14,17 +15,33 @@ const BOX_TYPES = {
 
 type BoxName = keyof typeof BOX_TYPES;
 
+const NUMBER_TYPES = [
+  "java.lang.Byte",
+  "java.lang.Double",
+  "java.lang.Float",
+  "java.lang.Integer",
+  "java.lang.Long",
+  "java.lang.Short",
+];
+
 /** Fully qualified type reference */
 export class TypeReference {
-  name: string;
+  qualifiedName: string;
 
   constructor(qualifiedName: string) {
-    this.name = qualifiedName;
+    this.qualifiedName = qualifiedName;
   }
 
-  qualifiedName() {
-    return this.name;
+  get name() {
+    return simpleName(this.qualifiedName);
   }
+
+  canonicalName = () => this.qualifiedName;
+
+  isVoid = () => this.qualifiedName === "java.lang.Void";
+  isBoolean = () => this.qualifiedName === "java.lang.Boolean";
+  isNumber = () => NUMBER_TYPES.includes(this.qualifiedName);
+  isString = () => this.qualifiedName === "java.lang.String";
 
   boxed(): this is TypeReference & { name: BoxName } {
     return BOX_TYPES.hasOwnProperty(this.name);

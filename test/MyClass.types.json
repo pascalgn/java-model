@@ -1,12 +1,11 @@
 {
   "Map": {
-    "name": "java.util.Map"
+    "qualifiedName": "java.util.Map"
   },
   "InnerClass2": {
     "name": "InnerClass2",
-    "modifiers": [],
     "annotations": [],
-    "types": [],
+    "modifiers": [],
     "parameters": [
       {
         "name": "T2",
@@ -24,6 +23,7 @@
     ],
     "interfaces": [],
     "methods": [],
+    "types": [],
     "constructors": [],
     "fields": [
       {

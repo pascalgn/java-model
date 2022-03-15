@@ -5,7 +5,6 @@ import {
   TypeContainer,
   Project,
   ResolvedType,
-  NormalTypeDeclaration,
 } from "./Project";
 import { TypeReference } from "./TypeReference";
 
@@ -28,9 +27,9 @@ export function resolve(
     throw new ResolveError(container, name);
   }
 
-  if (container instanceof NormalTypeDeclaration) {
+  if (container instanceof TypeDeclaration) {
     const typeParam = container.findObject((parent) =>
-      parent instanceof NormalTypeDeclaration
+      parent instanceof TypeDeclaration
         ? findObject(parent.parameters, name)
         : undefined
     );

@@ -1,15 +1,5 @@
 import { findObject } from "./common";
-import {
-  TypeDeclaration,
-  Class,
-  Enum,
-  Field,
-  isBoolean,
-  isVoid,
-  Method,
-  Type,
-  NormalTypeDeclaration,
-} from "./Project";
+import { TypeDeclaration, Class, Enum, Field, Method, Type } from "./Project";
 
 export class Property {
   static isGetter(method: Method): boolean {
@@ -17,8 +7,8 @@ export class Property {
       method.isPublic() &&
       !method.modifiers.includes("static") &&
       method.parameters.length === 0 &&
-      !isVoid(method.type) &&
-      (isBoolean(method.type)
+      !method.type.isVoid() &&
+      (method.type.isBoolean()
         ? method.name.match(/^(is|get)./)
         : method.name.match(/^get./)) != undefined
     );
@@ -28,15 +18,15 @@ export class Property {
     return (
       method.isPublic() &&
       !method.modifiers.includes("static") &&
-      isVoid(method.type) &&
+      method.type.isVoid() &&
       method.parameters.length === 1 &&
-      !isVoid(method.parameters[0].type) &&
+      !method.parameters[0].type.isVoid() &&
       method.name.match(/^set./) != undefined
     );
   }
 
   static getterName(field: Field) {
-    return isBoolean(field.type)
+    return field.type.isBoolean()
       ? `is${capitalize(field.name)}`
       : `get${capitalize(field.name)}`;
   }
@@ -50,14 +40,14 @@ export class Property {
       return decapitalize(method.name.slice(3));
     } else if (method.name.startsWith("set")) {
       return decapitalize(method.name.slice(3));
-    } else if (isBoolean(method.type) && method.name.startsWith("is")) {
+    } else if (method.type.isBoolean() && method.name.startsWith("is")) {
       return decapitalize(method.name.slice(2));
     } else {
       throw new Error(`not an accessor: ${method.name}`);
     }
   }
 
-  static properties(type: NormalTypeDeclaration): Property[] {
+  static properties(type: TypeDeclaration): Property[] {
     const properties: Property[] = [];
     if (type instanceof Class || type instanceof Enum) {
       for (const field of type.fields) {

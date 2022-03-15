@@ -4,6 +4,7 @@ import {
   ClassDeclarationContext,
   CompilationUnitContext,
   ConstructorDeclarationContext,
+  ElementValueContext,
   ElementValuePairContext,
   EnumConstantContext,
   EnumDeclarationContext,
@@ -15,7 +16,8 @@ import {
 } from "java-ast";
 import { ParserRuleContext } from "antlr4ts";
 import { Property } from "./Property";
-import { Expression, Modifier, qualifiedName } from "./common";
+import { Modifier, qualifiedName, simpleName } from "./common";
+import { Expression } from "./Expression";
 import { PrimitiveType } from "./PrimitiveType";
 import { resolve } from "./resolve";
 import { TypeReference } from "./TypeReference";
@@ -30,7 +32,7 @@ export class Project {
     for (const compilationUnit of this.compilationUnits) {
       compilationUnit.parent = this;
       compilationUnit.visitTypes((type) => {
-        const qualifiedName = type.qualifiedName();
+        const qualifiedName = type.qualifiedName;
         if (this.types[qualifiedName] == undefined) {
           this.types[qualifiedName] = type;
         } else {
@@ -146,18 +148,25 @@ export class ObjectType {
     this.arguments = [];
   }
 
+  get qualifiedName(): string {
+    return qualifiedName(this.qualifier?.qualifiedName, this.name);
+  }
+
+  canonicalName = () => this.resolve().canonicalName();
+
   resolve(): ResolvedType {
     if (this.resolved == undefined) {
       this.resolved = this.container
         .project()
-        .resolve(this.container, this._name());
+        .resolve(this.container, this.qualifiedName);
     }
     return this.resolved;
   }
 
-  private _name(): string {
-    return qualifiedName(this.qualifier?._name(), this.name);
-  }
+  isVoid = () => false;
+  isBoolean = () => false;
+  isNumber = () => false;
+  isString = () => false;
 
   toJSON() {
     return { ...this, container: undefined, resolved: undefined };
@@ -192,52 +201,46 @@ export class ArrayType {
   get name(): string {
     return this.component.name + "[]".repeat(this.dimension);
   }
+
+  get qualifiedName(): string {
+    return this.component.qualifiedName + "[]".repeat(this.dimension);
+  }
+
+  isVoid = () => false;
+  isBoolean = () => false;
+  isNumber = () => false;
+  isString = () => false;
 }
 
 export type Type = PrimitiveType | ObjectType | ArrayType;
-
-export function isVoid(type: Type) {
-  return typeEquals(type, "void", "java.lang.Void");
-}
-
-export function isBoolean(type: Type) {
-  return typeEquals(type, "boolean", "java.lang.Boolean");
-}
-
-export function isString(type: Type) {
-  return typeEquals(type, "", "java.lang.String");
-}
-
-function typeEquals(type: Type, primitive: string, object: string) {
-  if (type instanceof PrimitiveType) {
-    return type.name === primitive;
-  } else if (type instanceof ObjectType) {
-    const resolved = type.resolve();
-    return resolved instanceof TypeReference && resolved.name === object;
-  } else if (type instanceof TypeReference) {
-    return type.name === object;
-  } else {
-    return false;
-  }
-}
 
 export type ResolvedType = TypeDeclaration | TypeParameter | TypeReference;
 
 export class Annotation extends Model {
   parent: Model;
   context: AnnotationContext;
-  name: string;
+  qualifiedName: string;
   values: AnnotationValue[];
 
   private resolved?: AnnotationDeclaration | TypeReference;
 
-  constructor(parent: Model, context: AnnotationContext, name: string) {
+  constructor(
+    parent: Model,
+    context: AnnotationContext,
+    qualifiedName: string
+  ) {
     super();
     this.parent = parent;
     this.context = context;
-    this.name = name;
+    this.qualifiedName = qualifiedName;
     this.values = [];
   }
+
+  get name() {
+    return simpleName(this.qualifiedName);
+  }
+
+  canonicalName = () => this.resolve().canonicalName();
 
   resolve(): AnnotationDeclaration | TypeReference {
     if (this.resolved == undefined) {
@@ -270,13 +273,13 @@ export class Annotation extends Model {
 
 export class AnnotationValue extends Model {
   parent: Annotation;
-  context: AnnotationContext | ElementValuePairContext;
+  context: ElementValueContext;
   name: string;
   value: Expression;
 
   constructor(
     parent: Annotation,
-    context: AnnotationContext | ElementValuePairContext,
+    context: ElementValueContext,
     name: string,
     value: Expression
   ) {
@@ -292,8 +295,11 @@ export class AnnotationValue extends Model {
 export abstract class TypeDeclaration extends Model {
   parent: TypeContainer;
   name: string;
-  modifiers: Modifier[];
   annotations: Annotation[];
+  modifiers: Modifier[];
+  parameters: TypeParameter[];
+  interfaces: ObjectType[];
+  methods: Method[];
   /** Nested types */
   types: TypeDeclaration[];
 
@@ -301,17 +307,31 @@ export abstract class TypeDeclaration extends Model {
     super();
     this.parent = parent;
     this.name = name;
-    this.modifiers = [];
     this.annotations = [];
+    this.modifiers = [];
+    this.parameters = [];
+    this.interfaces = [];
+    this.methods = [];
     this.types = [];
   }
 
-  qualifiedName(): string {
+  get qualifiedName(): string {
     const parentName =
       this.parent instanceof CompilationUnit
         ? this.parent.packageName
-        : this.parent.qualifiedName();
-    return parentName == undefined ? this.name : `${parentName}.${this.name}`;
+        : this.parent.qualifiedName;
+    return qualifiedName(parentName, this.name);
+  }
+
+  canonicalName = () => this.qualifiedName;
+
+  isVoid = () => false;
+  isBoolean = () => false;
+  isNumber = () => false;
+  isString = () => false;
+
+  properties() {
+    return Property.properties(this);
   }
 
   visitParents(callback: (type: TypeDeclaration) => void) {
@@ -342,14 +362,14 @@ export abstract class TypeDeclaration extends Model {
     return false;
   }
 
-  hasAnnotation(qualifiedName: string) {
-    return hasAnnotation(this.annotations, qualifiedName);
+  hasAnnotation(canonicalName: string) {
+    return hasAnnotation(this.annotations, canonicalName);
   }
 }
 
-function hasAnnotation(annotations: Annotation[], qualifiedName: string) {
+function hasAnnotation(annotations: Annotation[], canonicalName: string) {
   return annotations.some(
-    (annotation) => annotation.resolve().qualifiedName() === qualifiedName
+    (annotation) => annotation.canonicalName() === canonicalName
   );
 }
 
@@ -363,24 +383,6 @@ export class AnnotationDeclaration extends TypeDeclaration {
   ) {
     super(parent, name);
     this.context = context;
-  }
-}
-
-/** Class, interface or enum declaration */
-export abstract class NormalTypeDeclaration extends TypeDeclaration {
-  parameters: TypeParameter[];
-  interfaces: ObjectType[];
-  methods: Method[];
-
-  constructor(parent: TypeContainer, name: string) {
-    super(parent, name);
-    this.parameters = [];
-    this.interfaces = [];
-    this.methods = [];
-  }
-
-  properties() {
-    return Property.properties(this);
   }
 }
 
@@ -403,9 +405,20 @@ export class TypeParameter extends Model {
     this.name = name;
     this.constraints = [];
   }
+
+  get qualifiedName() {
+    return this.name;
+  }
+
+  canonicalName = () => this.name;
+
+  isVoid = () => false;
+  isBoolean = () => false;
+  isNumber = () => false;
+  isString = () => false;
 }
 
-export class Interface extends NormalTypeDeclaration {
+export class Interface extends TypeDeclaration {
   context: InterfaceDeclarationContext;
 
   constructor(
@@ -418,7 +431,7 @@ export class Interface extends NormalTypeDeclaration {
   }
 }
 
-export class Class extends NormalTypeDeclaration {
+export class Class extends TypeDeclaration {
   context: ClassDeclarationContext;
   superclass?: ObjectType;
   constructors: Constructor[];
@@ -436,7 +449,7 @@ export class Class extends NormalTypeDeclaration {
   }
 }
 
-export class Enum extends NormalTypeDeclaration {
+export class Enum extends TypeDeclaration {
   context: EnumDeclarationContext;
   constants: EnumConstant[];
   constructors: Constructor[];
@@ -558,6 +571,7 @@ export class Parameter extends Model {
 export class Field extends TypeMember {
   context: FieldDeclarationContext;
   type: Type;
+  initializer?: Expression;
 
   constructor(
     parent: TypeDeclaration,

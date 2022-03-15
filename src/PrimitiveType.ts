@@ -14,6 +14,8 @@ const PRIMITIVE_TYPES = {
 
 type PrimitiveName = keyof typeof PRIMITIVE_TYPES;
 
+const NUMBER_TYPES = ["byte", "double", "float", "int", "long", "short"];
+
 /** Primitive type, e.g. `int` or `void` */
 export class PrimitiveType {
   static VOID = new PrimitiveType("void");
@@ -27,7 +29,18 @@ export class PrimitiveType {
     this.name = name;
   }
 
-  box(): TypeReference {
+  get qualifiedName() {
+    return this.name;
+  }
+
+  canonicalName = () => this.name;
+
+  isVoid = () => this.name === "void";
+  isBoolean = () => this.name === "boolean";
+  isNumber = () => NUMBER_TYPES.includes(this.name);
+  isString = () => false;
+
+  box() {
     return new TypeReference(PRIMITIVE_TYPES[this.name]);
   }
 }

@@ -1,4 +1,5 @@
 export * from "./src/common";
+export * from "./src/Expression";
 export * from "./src/parse";
 export * from "./src/PrimitiveType";
 export * from "./src/Project";

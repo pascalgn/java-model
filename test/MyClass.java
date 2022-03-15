@@ -13,6 +13,7 @@ abstract class MyClass {
     @Annotation1
     abstract Map<@NotNull String, String> method1(int x);
 
+    @Annotation2(test = @Annotation3({ 123, 456 }))
     abstract void method2(final String a, @A @B(1.0) List<@Null String> b);
 
     protected class InnerClass1<T1> {
@@ -26,5 +27,11 @@ abstract class MyClass {
     abstract InnerClass1<String>.InnerClass2<Number> method3();
 
     private final List<Map<Set<Integer>, List<Double>>> field1;
-    private Set<? extends List<?>> field2;
+    private Set<? extends List<?>> field2 = new java.util.HashSet<>(100, 0.5f);
+
+    private long[][] field3a;
+    private Long[][] field3b;
+    private List<String>[][] field4;
+
+    private int field5 = (-0x100);
 }

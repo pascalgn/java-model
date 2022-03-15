@@ -8,14 +8,28 @@ import {
   TypeTypeOrVoidContext,
   ConcreteVisitor,
   TypeListContext,
+  ElementValueContext,
+  ExpressionContext,
+  AnnotationContext,
+  Visitor,
+  TypeArgumentsOrDiamondContext,
+  CreatorContext,
+  PrimaryContext,
 } from "java-ast";
 import { JavaLexer } from "java-ast/dist/parser/JavaLexer";
-import { AbstractParseTreeVisitor } from "antlr4ts/tree/AbstractParseTreeVisitor";
 import { ParserRuleContext } from "antlr4ts";
-import { ParseTree } from "antlr4ts/tree/ParseTree";
-import { RuleNode } from "antlr4ts/tree/RuleNode";
 import { TerminalNode } from "antlr4ts/tree/TerminalNode";
-import { Expression, Modifier } from "./common";
+import { Interval } from "antlr4ts/misc/Interval";
+import { Modifier } from "./common";
+import {
+  ConstructorInvocation,
+  Expression,
+  ExpressionList,
+  Literal,
+  Name,
+  Token,
+  Unknown,
+} from "./Expression";
 import {
   Class,
   CompilationUnit,
@@ -39,7 +53,7 @@ import {
   Annotation,
   AnnotationValue,
   AnnotationDeclaration,
-  NormalTypeDeclaration,
+  EnumConstant,
 } from "./Project";
 import { PrimitiveType } from "./PrimitiveType";
 
@@ -144,7 +158,7 @@ function parseFile(source: string): CompilationUnit {
   }
 
   function addInterfaces(parent?: TypeDeclaration, ctx?: TypeListContext) {
-    if (type instanceof NormalTypeDeclaration && ctx != undefined) {
+    if (type != undefined && ctx != undefined) {
       type.interfaces = ctx
         .typeType()
         .map((t) => parseObjectType(parent ?? compilationUnit!, t));
@@ -227,10 +241,16 @@ function parseFile(source: string): CompilationUnit {
       visitor.visitChildren(ctx);
       type = previousType;
     },
+    visitEnumConstant(ctx) {
+      const parent = type as Enum;
+      parent.constants.push(
+        new EnumConstant(parent, ctx, ctx.IDENTIFIER().text)
+      );
+    },
     visitTypeParameter(ctx) {
       typeParameter = new TypeParameter(type!, ctx, ctx.IDENTIFIER().text);
       visitor.visitChildren(ctx);
-      if (type instanceof NormalTypeDeclaration) {
+      if (type != undefined) {
         type.parameters.push(typeParameter);
       }
     },
@@ -242,38 +262,8 @@ function parseFile(source: string): CompilationUnit {
       }
     },
     visitAnnotation(ctx) {
-      const annotation = new Annotation(
-        dummyParent,
-        ctx,
-        ctx
-          .qualifiedName()
-          .IDENTIFIER()
-          .map((id) => id.text)
-          .join(".")
-      );
-      annotations.push(annotation);
-      if (ctx.elementValue() != undefined) {
-        annotation.values.push(
-          new AnnotationValue(
-            annotation,
-            ctx,
-            "value",
-            expression(ctx.elementValue()!)
-          )
-        );
-      }
-      visitor.visitChildren(ctx);
-    },
-    visitElementValuePair(ctx) {
-      const annotation = annotations[annotations.length - 1];
-      annotation.values.push(
-        new AnnotationValue(
-          annotation,
-          ctx,
-          ctx.IDENTIFIER().text,
-          expression(ctx.elementValue())
-        )
-      );
+      const container = type ?? compilationUnit!;
+      annotations.push(parseAnnotation(ctx, container, dummyParent));
     },
     visitMethodDeclaration(ctx) {
       const methodName = ctx.IDENTIFIER().text;
@@ -310,6 +300,12 @@ function parseFile(source: string): CompilationUnit {
           const field = new Field(type, ctx, name, fieldType);
           field.modifiers = [...modifiers];
           copyAnnotationsTo(annotations, field);
+          if (variable.variableInitializer()?.expression() != undefined) {
+            field.initializer = parseExpression(
+              variable.variableInitializer()!.expression()!,
+              type
+            );
+          }
           type.fields.push(field);
         }
       }
@@ -338,22 +334,207 @@ function parseFile(source: string): CompilationUnit {
   return compilationUnit!;
 }
 
-function expression(ctx: ParserRuleContext): Expression {
-  const nodes: ParseTree[] = [];
-  const visitor = new (class extends AbstractParseTreeVisitor<void> {
-    visitChildren = (node: RuleNode) =>
-      node instanceof LiteralContext
-        ? nodes.push(node)
-        : super.visitChildren(node);
-    visitTerminal = (node: TerminalNode) => nodes.push(node);
-    defaultResult = () => undefined;
-  })();
-  ctx.accept(visitor);
-  if (nodes.length === 1 && nodes[0] instanceof LiteralContext) {
-    return JSON.parse(nodes[0].text);
-  } else {
-    return { expression: nodes.map((n) => n.text).join("") };
+function parseAnnotation(
+  ctx: AnnotationContext,
+  container: TypeContainer,
+  parent: Model
+) {
+  const name = ctx
+    .qualifiedName()
+    .IDENTIFIER()
+    .map((id) => id.text)
+    .join(".");
+  const annotation = new Annotation(parent, ctx, name);
+  if (ctx.elementValue() != undefined) {
+    annotation.values.push(
+      parseAnnotationValue(ctx.elementValue()!, container, annotation, "value")
+    );
   }
+  const pairs = ctx.elementValuePairs()?.elementValuePair();
+  if (pairs != undefined) {
+    for (const pair of pairs) {
+      annotation.values.push(
+        parseAnnotationValue(
+          pair.elementValue(),
+          container,
+          annotation,
+          pair.IDENTIFIER().text
+        )
+      );
+    }
+  }
+  return annotation;
+}
+
+function parseAnnotationValue(
+  ctx: ElementValueContext,
+  container: TypeContainer,
+  parent: Annotation,
+  name: string
+) {
+  const result = new AnnotationValue(parent, ctx, name, undefined as any);
+  result.value = parseAnnotationValueValue(ctx, container, result);
+  return result;
+}
+
+function parseAnnotationValueValue(
+  ctx: ElementValueContext,
+  container: TypeContainer,
+  parent: Model
+): Expression {
+  const result = createVisitor<Expression | undefined>({
+    defaultResult: () => undefined,
+    aggregateResult,
+    visitExpression(ctx) {
+      return parseExpression(ctx, container);
+    },
+    visitAnnotation(ctx) {
+      return parseAnnotation(ctx, container, parent);
+    },
+    visitElementValueArrayInitializer(ctx) {
+      return simplifyExpressions(
+        ctx
+          .elementValue()
+          .map((v) => parseAnnotationValueValue(v, container, parent))
+      );
+    },
+  }).visit(ctx);
+  return requireValue(
+    result,
+    () => "could not parse annotation value: " + ctx.text
+  );
+}
+
+function parseExpression(
+  ctx: ExpressionContext,
+  container: TypeContainer
+): Expression {
+  function parseType(ctx: CreatorContext) {
+    const name = ctx.createdName();
+    if (name.primitiveType() == undefined) {
+      let type: ObjectType | undefined;
+      for (let i = 0; i < name.childCount; i++) {
+        const child = name.getChild(i);
+        if (child instanceof TerminalNode) {
+          if (child.symbol.type === JavaLexer.IDENTIFIER) {
+            if (type == undefined) {
+              type = new ObjectType(container, child.text);
+            } else {
+              const qualifier = type;
+              type = new ObjectType(container, child.text);
+              type.qualifier = qualifier;
+            }
+          }
+        } else if (child instanceof TypeArgumentsOrDiamondContext) {
+          type!.arguments =
+            child
+              .typeArguments()
+              ?.typeArgument()
+              ?.map((arg) => parseTypeArgument(container, arg)) ?? [];
+        }
+      }
+      return type!;
+    } else {
+      const comp = new PrimitiveType(name.primitiveType()!.text);
+      return new ArrayType(comp, ctx.arrayCreatorRest()!.LBRACK().length);
+    }
+  }
+
+  function parse(ctx: ParserRuleContext): Expression | Expression[] {
+    if (ctx instanceof LiteralContext) {
+      if (ctx.integerLiteral() != undefined) {
+        return new Literal(Number(ctx.text.replace(/(_|[lL]$)/g, "")));
+      } else if (ctx.floatLiteral() != undefined) {
+        return new Literal(Number(ctx.text.replace(/[fFdD]$/, "")));
+      } else {
+        return new Literal(JSON.parse(ctx.text));
+      }
+    } else if (
+      ctx instanceof PrimaryContext ||
+      ctx instanceof ExpressionContext
+    ) {
+      return parseChildren(ctx);
+    } else if (ctx instanceof CreatorContext) {
+      const type = parseType(ctx);
+      const args = ctx
+        ?.classCreatorRest()
+        ?.arguments()
+        .expressionList()
+        ?.expression()
+        .map((e) => parseExpression(e, container));
+      return new ConstructorInvocation(type, args);
+    } else if (ctx instanceof TerminalNode) {
+      if (ctx.symbol.type === JavaLexer.IDENTIFIER) {
+        return new Name(ctx.text);
+      } else {
+        return new Token(ctx.text);
+      }
+    } else {
+      return new Unknown(
+        ctx.start.inputStream!.getText(
+          new Interval(ctx.start.startIndex, ctx.stop?.stopIndex ?? -1)
+        )
+      );
+    }
+  }
+
+  function parseChildren(ctx: ParserRuleContext): Expression[] {
+    return (ctx.children ?? [])
+      .map((child) => parse(child as ParserRuleContext))
+      .flat();
+  }
+
+  return simplifyExpressions(parseChildren(ctx));
+}
+
+function simplifyExpressions(expressions: Expression[]): Expression {
+  const isToken = (e: Expression, token: string) =>
+    e instanceof Token && e.code === token;
+
+  const isString = (e: Expression): e is { value: string } =>
+    e instanceof Literal && typeof e.value === "string";
+
+  let result = expressions;
+  while (true) {
+    if (
+      result.length > 1 &&
+      isToken(result[0], "(") &&
+      isToken(result[result.length - 1], ")")
+    ) {
+      result = result.slice(1, -1);
+    } else if (
+      result.length === 2 &&
+      (isToken(result[0], "+") || isToken(result[0], "-")) &&
+      result[1] instanceof Literal
+    ) {
+      if (isToken(result[0], "-")) {
+        (result[1].value as number) *= -1;
+      }
+      result = result.slice(1);
+    } else if (
+      result.length === 2 &&
+      isToken(result[0], "new") &&
+      result[1] instanceof ConstructorInvocation
+    ) {
+      result = result.slice(1);
+    } else if (
+      result.length > 2 &&
+      isString(result[0]) &&
+      isToken(result[1], "+") &&
+      isString(result[2])
+    ) {
+      result[0].value += result[2].value;
+      result = result.slice(0, 1);
+    } else {
+      let modified = false;
+
+      if (!modified) {
+        break;
+      }
+    }
+  }
+
+  return result.length === 1 ? result[0] : new ExpressionList(result);
 }
 
 function copyAnnotationsTo(annotations: Annotation[], target: Field) {
@@ -370,23 +551,26 @@ function parseType(
   container: TypeContainer,
   ctx: TypeTypeContext | TypeTypeOrVoidContext
 ): Type {
-  let result: Type | undefined;
-  const visitor: ConcreteVisitor<void> = createVisitor({
+  const result = createVisitor<Type | undefined>({
+    defaultResult: () => undefined,
+    aggregateResult,
     visitTypeType(ctx) {
-      visitor.visitChildren(ctx);
+      const type = visitChildren(this, ctx);
       if (ctx.LBRACK().length > 0) {
-        if (result instanceof ArrayType || result == undefined) {
-          throw new Error("invalid type!");
+        if (type instanceof ArrayType || type == undefined) {
+          throw new Error("invalid type: " + ctx.text);
         } else {
-          result = new ArrayType(result, ctx.LBRACK().length);
+          return new ArrayType(type, ctx.LBRACK().length);
         }
+      } else {
+        return type;
       }
     },
     visitTypeTypeOrVoid(ctx) {
       if (ctx.VOID() == undefined) {
-        visitor.visitChildren(ctx);
+        return visitChildren(this, ctx);
       } else {
-        result = PrimitiveType.VOID;
+        return PrimitiveType.VOID;
       }
     },
     visitClassOrInterfaceType(ctx) {
@@ -409,17 +593,35 @@ function parseType(
             .map((arg) => parseTypeArgument(container, arg));
         }
       }
-      result = type;
+      return type!;
     },
     visitPrimitiveType(ctx) {
-      result = new PrimitiveType(ctx.text);
+      return new PrimitiveType(ctx.text);
     },
-  });
-  ctx.accept(visitor);
-  if (result == undefined) {
-    throw new Error("Failed to create reference");
+  }).visit(ctx);
+  return requireValue(result, () => "could not parse type: " + ctx.text);
+}
+
+function aggregateResult(prev: any, next: any) {
+  if (prev == undefined && next == undefined) {
+    return undefined;
+  } else if (prev == undefined && next != undefined) {
+    return next;
+  } else if (prev != undefined && next == undefined) {
+    return prev;
   } else {
-    return result;
+    throw new AggregateError(prev, next);
+  }
+}
+
+class AggregateError extends Error {
+  readonly prev: unknown;
+  readonly next: unknown;
+
+  constructor(prev: unknown, next: unknown) {
+    super("cannot aggregate two values");
+    this.prev = prev;
+    this.next = next;
   }
 }
 
@@ -431,7 +633,7 @@ function parseObjectType(
   if (ref instanceof ObjectType) {
     return ref;
   } else {
-    throw new Error(`Invalid type, expected class: ${JSON.stringify(ref)}`);
+    throw new Error(`invalid type, expected class: ${JSON.stringify(ref)}`);
   }
 }
 
@@ -444,7 +646,7 @@ function parseTypeArgument(
     if (ref instanceof ObjectType || ref instanceof ArrayType) {
       return ref;
     } else {
-      throw new Error(`Invalid type argument: ${JSON.stringify(ref)}`);
+      throw new Error(`invalid type argument: ${JSON.stringify(ref)}`);
     }
   } else {
     const ref = new Wildcard();
@@ -460,5 +662,17 @@ function parseTypeArgument(
       };
     }
     return ref;
+  }
+}
+
+function visitChildren<T>(visitor: Visitor<T>, ctx: ParserRuleContext): T {
+  return (visitor as unknown as ConcreteVisitor<T>).visitChildren(ctx);
+}
+
+function requireValue<T>(value: T | undefined, error: () => string): T {
+  if (value == undefined) {
+    throw new Error(error());
+  } else {
+    return value;
   }
 }
