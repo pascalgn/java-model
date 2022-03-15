@@ -43,15 +43,15 @@ export class TypeReference {
   isNumber = () => NUMBER_TYPES.includes(this.qualifiedName);
   isString = () => this.qualifiedName === "java.lang.String";
 
-  boxed(): this is TypeReference & { name: BoxName } {
-    return BOX_TYPES.hasOwnProperty(this.name);
+  boxed(): this is TypeReference & { qualifiedName: BoxName } {
+    return BOX_TYPES.hasOwnProperty(this.qualifiedName);
   }
 
   unbox(): PrimitiveType {
     if (this.boxed()) {
-      return new PrimitiveType(BOX_TYPES[this.name]);
+      return new PrimitiveType(BOX_TYPES[this.qualifiedName]);
     } else {
-      throw new Error(`not a box type: ${this.name}`);
+      throw new Error(`not a box type: ${this.qualifiedName}`);
     }
   }
 }

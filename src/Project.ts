@@ -11,6 +11,7 @@ import {
   FieldDeclarationContext,
   FormalParameterContext,
   InterfaceDeclarationContext,
+  InterfaceMethodDeclarationContext,
   MethodDeclarationContext,
   TypeParameterContext,
 } from "java-ast";
@@ -525,13 +526,13 @@ export class Constructor extends TypeMember implements HasParameters {
 }
 
 export class Method extends TypeMember implements HasParameters {
-  context: MethodDeclarationContext;
+  context: MethodDeclarationContext | InterfaceMethodDeclarationContext;
   type: Type;
   parameters: Parameter[];
 
   constructor(
     parent: TypeDeclaration,
-    context: MethodDeclarationContext,
+    context: MethodDeclarationContext | InterfaceMethodDeclarationContext,
     name: string,
     type: Type
   ) {

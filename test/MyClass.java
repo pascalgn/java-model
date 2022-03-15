@@ -21,6 +21,10 @@ abstract class MyClass {
             private T2 field2;
         }
 
+        interface InnerInterface {
+            Long value();
+        }
+
         private T1 field1;
     }
 

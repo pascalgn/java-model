@@ -244,6 +244,26 @@
                   }
                 }
               ]
+            },
+            {
+              "name": "InnerInterface",
+              "annotations": [],
+              "modifiers": [],
+              "parameters": [],
+              "interfaces": [],
+              "methods": [
+                {
+                  "name": "value",
+                  "modifiers": [],
+                  "annotations": [],
+                  "type": {
+                    "name": "Long",
+                    "arguments": []
+                  },
+                  "parameters": []
+                }
+              ],
+              "types": []
             }
           ],
           "constructors": [],

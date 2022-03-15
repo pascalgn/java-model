@@ -276,7 +276,24 @@ function parseFile(source: string): CompilationUnit {
       );
       moveModifiers(method);
       moveAnnotations(method);
-      if (type instanceof Class || type instanceof Interface) {
+      if (type instanceof Class) {
+        type.methods.push(method);
+      }
+      hasParameters = method;
+      visitor.visitChildren(ctx);
+    },
+    visitInterfaceMethodDeclaration(ctx) {
+      const methodName = ctx.IDENTIFIER().text;
+      const returnType = ctx.typeTypeOrVoid()!;
+      const method = new Method(
+        type!,
+        ctx,
+        methodName,
+        parseType(type!, returnType)
+      );
+      moveModifiers(method);
+      moveAnnotations(method);
+      if (type instanceof Interface) {
         type.methods.push(method);
       }
       hasParameters = method;
@@ -597,6 +614,9 @@ function parseType(
     },
     visitPrimitiveType(ctx) {
       return new PrimitiveType(ctx.text);
+    },
+    visitAnnotation(ctx) {
+      return undefined;
     },
   }).visit(ctx);
   return requireValue(result, () => "could not parse type: " + ctx.text);
