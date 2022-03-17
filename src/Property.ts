@@ -72,6 +72,7 @@ export class Property {
           properties.push(property);
         }
         property.getter = method;
+        property.type = method.type;
       }
     }
     for (const method of type.methods) {

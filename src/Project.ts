@@ -17,7 +17,7 @@ import {
 } from "java-ast";
 import { ParserRuleContext } from "antlr4ts";
 import { Property } from "./Property";
-import { Modifier, qualifiedName, simpleName } from "./common";
+import { findObject, Modifier, qualifiedName, simpleName } from "./common";
 import { Expression } from "./Expression";
 import { PrimitiveType } from "./PrimitiveType";
 import { resolve } from "./resolve";
@@ -289,6 +289,19 @@ export class AnnotationValue extends Model {
     this.context = context;
     this.name = name;
     this.value = value;
+  }
+}
+
+export function findAnnotationValue(
+  annotations: Annotation[],
+  qualifiedName: string,
+  name: string
+): Expression | undefined {
+  for (const annotation of annotations) {
+    const resolved = annotation.resolve();
+    if (resolved.qualifiedName === qualifiedName) {
+      return findObject(annotation.values, name)?.value;
+    }
   }
 }
 
