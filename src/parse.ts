@@ -1,23 +1,27 @@
 import {
-  createVisitor,
-  parse as parseAst,
-  LiteralContext,
-  TypeArgumentContext,
-  TypeArgumentsContext,
-  TypeTypeContext,
-  TypeTypeOrVoidContext,
+  AnnotationContext,
   ConcreteVisitor,
-  TypeListContext,
+  createVisitor,
+  CreatorContext,
   ElementValueContext,
   ExpressionContext,
-  AnnotationContext,
-  Visitor,
-  TypeArgumentsOrDiamondContext,
-  CreatorContext,
+  LiteralContext,
   PrimaryContext,
+  TypeArgumentContext,
+  TypeArgumentsContext,
+  TypeArgumentsOrDiamondContext,
+  TypeListContext,
+  TypeTypeContext,
+  TypeTypeOrVoidContext,
+  Visitor,
 } from "java-ast";
 import { JavaLexer } from "java-ast/dist/parser/JavaLexer";
-import { ParserRuleContext } from "antlr4ts";
+import { JavaParser } from "java-ast/dist/parser/JavaParser";
+import {
+  ANTLRInputStream,
+  CommonTokenStream,
+  ParserRuleContext,
+} from "antlr4ts";
 import { TerminalNode } from "antlr4ts/tree/TerminalNode";
 import { Interval } from "antlr4ts/misc/Interval";
 import { Modifier } from "./common";
@@ -31,29 +35,29 @@ import {
   Unknown,
 } from "./Expression";
 import {
+  Annotation,
+  AnnotationDeclaration,
+  AnnotationValue,
+  ArrayType,
   Class,
   CompilationUnit,
   Constructor,
-  TypeDeclaration,
+  Enum,
+  EnumConstant,
   Field,
   HasParameters,
   Interface,
   Method,
+  Model,
+  ObjectType,
   Parameter,
   Project,
-  TypeParameter,
-  Enum,
-  TypeArgument,
-  ArrayType,
-  ObjectType,
   Type,
-  Wildcard,
+  TypeArgument,
   TypeContainer,
-  Model,
-  Annotation,
-  AnnotationValue,
-  AnnotationDeclaration,
-  EnumConstant,
+  TypeDeclaration,
+  TypeParameter,
+  Wildcard,
 } from "./Project";
 import { PrimitiveType } from "./PrimitiveType";
 
@@ -351,6 +355,26 @@ function parseFile(source: string): CompilationUnit {
   return compilationUnit!;
 }
 
+function parseAst(source: string) {
+  const chars = new ANTLRInputStream(source);
+  const lexer = new JavaLexer(chars);
+  const tokens = new CommonTokenStream(lexer);
+  const parser = new JavaParser(tokens);
+  parser.removeErrorListeners();
+  parser.addErrorListener({
+    syntaxError: (
+      recognizer,
+      offendingSymbol,
+      line,
+      charPositionInLine,
+      msg
+    ) => {
+      throw new Error(`syntax error: ${msg}`);
+    },
+  });
+  return parser.compilationUnit();
+}
+
 function parseAnnotation(
   ctx: AnnotationContext,
   container: TypeContainer,
@@ -568,7 +592,7 @@ function parseType(
   container: TypeContainer,
   ctx: TypeTypeContext | TypeTypeOrVoidContext
 ): Type {
-  const result = createVisitor<Type | undefined>({
+  const visitor = createVisitor<Type | undefined>({
     defaultResult: () => undefined,
     aggregateResult,
     visitTypeType(ctx) {
@@ -618,7 +642,13 @@ function parseType(
     visitAnnotation(ctx) {
       return undefined;
     },
-  }).visit(ctx);
+  });
+  visitor.visitErrorNode = (node) => {
+    console.error(node);
+    throw new Error("xx");
+    return undefined;
+  };
+  const result = visitor.visit(ctx);
   return requireValue(result, () => "could not parse type: " + ctx.text);
 }
 

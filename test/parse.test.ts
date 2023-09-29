@@ -24,6 +24,17 @@ describe("Parser", () => {
 
     compareResult("test/MyClass.types.json", types);
   });
+
+  test("should throw an error", () => {
+    const source = "record Record() {}";
+    let error;
+    try {
+      parse([source]);
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeTruthy();
+  });
 });
 
 function compareResult(filename: string, result: unknown) {
