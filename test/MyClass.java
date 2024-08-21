@@ -30,6 +30,15 @@ abstract class MyClass {
 
     abstract InnerClass1<String>.InnerClass2<Number> method3();
 
+    public record Record1(int i, String s) {
+    }
+
+    public Record1 method4() {
+        return null;
+    }
+
+    public enum Enum1 { A, B }
+
     private final List<Map<Set<Integer>, List<Double>>> field1;
     private Set<? extends List<?>> field2 = new java.util.HashSet<>(100, 0.5f);
 

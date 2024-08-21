@@ -181,6 +181,18 @@
             }
           },
           "parameters": []
+        },
+        {
+          "name": "method4",
+          "modifiers": [
+            "public"
+          ],
+          "annotations": [],
+          "type": {
+            "name": "Record1",
+            "arguments": []
+          },
+          "parameters": []
         }
       ],
       "types": [
@@ -280,6 +292,58 @@
               }
             }
           ]
+        },
+        {
+          "name": "Record1",
+          "annotations": [],
+          "modifiers": [
+            "public"
+          ],
+          "parameters": [],
+          "interfaces": [],
+          "methods": [],
+          "types": [],
+          "constructors": [],
+          "fields": [
+            {
+              "name": "i",
+              "modifiers": [],
+              "annotations": [],
+              "type": {
+                "name": "int"
+              }
+            },
+            {
+              "name": "s",
+              "modifiers": [],
+              "annotations": [],
+              "type": {
+                "name": "String",
+                "arguments": []
+              }
+            }
+          ]
+        },
+        {
+          "name": "Enum1",
+          "annotations": [],
+          "modifiers": [
+            "public"
+          ],
+          "parameters": [],
+          "interfaces": [],
+          "methods": [],
+          "types": [],
+          "constants": [
+            {
+              "name": "A"
+            },
+            {
+              "name": "B"
+            }
+          ],
+          "constructors": [],
+          "fields": []
         }
       ],
       "constructors": [],

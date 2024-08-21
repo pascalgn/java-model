@@ -26,7 +26,7 @@ describe("Parser", () => {
   });
 
   test("should throw an error", () => {
-    const source = "record Record() {}";
+    const source = readFileSync("test/MyError.java", "utf8");
     let error;
     try {
       parse([source]);

@@ -38,5 +38,36 @@
         }
       }
     ]
+  },
+  "Record1": {
+    "name": "Record1",
+    "annotations": [],
+    "modifiers": [
+      "public"
+    ],
+    "parameters": [],
+    "interfaces": [],
+    "methods": [],
+    "types": [],
+    "constructors": [],
+    "fields": [
+      {
+        "name": "i",
+        "modifiers": [],
+        "annotations": [],
+        "type": {
+          "name": "int"
+        }
+      },
+      {
+        "name": "s",
+        "modifiers": [],
+        "annotations": [],
+        "type": {
+          "name": "String",
+          "arguments": []
+        }
+      }
+    ]
   }
 }

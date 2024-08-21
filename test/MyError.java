@@ -1,4 +1,7 @@
 package test;
 
-record Error(String str, int i) {
+class MyError {
+    void f() {
+        123
+    }
 }

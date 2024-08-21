@@ -1,5 +1,5 @@
 import { findObject } from "./common";
-import { TypeDeclaration, Class, Enum, Field, Method, Type } from "./Project";
+import {TypeDeclaration, Class, Enum, Field, Method, Type, Record} from "./Project";
 
 export class Property {
   static isGetter(method: Method): boolean {
@@ -60,6 +60,17 @@ export class Property {
           } else {
             throw new Error(`duplicate field name: ${field.name}`);
           }
+        }
+      }
+    } else if (type instanceof Record) {
+      for (const field of type.fields) {
+        let property = findObject(properties, field.name);
+        if (property == undefined) {
+          property = new Property(type, field.type, field.name);
+          property.field = field;
+          properties.push(property);
+        } else {
+          throw new Error(`duplicate field name: ${field.name}`);
         }
       }
     }

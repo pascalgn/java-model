@@ -5,7 +5,6 @@ import {
   CompilationUnitContext,
   ConstructorDeclarationContext,
   ElementValueContext,
-  ElementValuePairContext,
   EnumConstantContext,
   EnumDeclarationContext,
   FieldDeclarationContext,
@@ -13,7 +12,9 @@ import {
   InterfaceDeclarationContext,
   InterfaceMethodDeclarationContext,
   MethodDeclarationContext,
-  TypeParameterContext,
+  RecordComponentContext,
+  RecordDeclarationContext,
+  TypeParameterContext
 } from "java-ast";
 import { ParserRuleContext } from "antlr4ts";
 import { Property } from "./Property";
@@ -25,7 +26,7 @@ import { TypeReference } from "./TypeReference";
 
 export class Project {
   private compilationUnits: CompilationUnit[];
-  private types: Record<string, TypeDeclaration>;
+  private types: { [key: string]: TypeDeclaration };
 
   constructor(compilationUnits: CompilationUnit[]) {
     this.compilationUnits = compilationUnits;
@@ -122,6 +123,7 @@ export class CompilationUnit extends Model {
         visit(t);
       }
     }
+
     for (const type of this.types) {
       visit(type);
     }
@@ -267,7 +269,7 @@ export class Annotation extends Model {
       ...this,
       parent: undefined,
       context: undefined,
-      resolved: undefined,
+      resolved: undefined
     };
   }
 }
@@ -463,6 +465,23 @@ export class Class extends TypeDeclaration {
   }
 }
 
+export class Record extends TypeDeclaration {
+  context: RecordDeclarationContext;
+  constructors: Constructor[];
+  fields: Field[];
+
+  constructor(
+    parent: TypeContainer,
+    context: RecordDeclarationContext,
+    name: string
+  ) {
+    super(parent, name);
+    this.context = context;
+    this.constructors = [];
+    this.fields = [];
+  }
+}
+
 export class Enum extends TypeDeclaration {
   context: EnumDeclarationContext;
   constants: EnumConstant[];
@@ -583,13 +602,13 @@ export class Parameter extends Model {
 }
 
 export class Field extends TypeMember {
-  context: FieldDeclarationContext;
+  context: FieldDeclarationContext | RecordComponentContext;
   type: Type;
   initializer?: Expression;
 
   constructor(
     parent: TypeDeclaration,
-    context: FieldDeclarationContext,
+    context: FieldDeclarationContext | RecordComponentContext,
     name: string,
     type: Type
   ) {

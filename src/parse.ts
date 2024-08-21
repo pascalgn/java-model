@@ -10,18 +10,20 @@ import {
   TypeArgumentContext,
   TypeArgumentsContext,
   TypeArgumentsOrDiamondContext,
+  TypeIdentifierContext,
   TypeListContext,
   TypeTypeContext,
   TypeTypeOrVoidContext,
-  Visitor,
+  Visitor
 } from "java-ast";
 import { JavaLexer } from "java-ast/dist/parser/JavaLexer";
-import { JavaParser } from "java-ast/dist/parser/JavaParser";
+import { IdentifierContext, JavaParser } from "java-ast/dist/parser/JavaParser";
 import {
   ANTLRInputStream,
   CommonTokenStream,
-  ParserRuleContext,
+  ParserRuleContext
 } from "antlr4ts";
+import { ParseTree } from "antlr4ts/tree/ParseTree";
 import { TerminalNode } from "antlr4ts/tree/TerminalNode";
 import { Interval } from "antlr4ts/misc/Interval";
 import { Modifier } from "./common";
@@ -32,7 +34,7 @@ import {
   Literal,
   Name,
   Token,
-  Unknown,
+  Unknown
 } from "./Expression";
 import {
   Annotation,
@@ -52,12 +54,13 @@ import {
   ObjectType,
   Parameter,
   Project,
+  Record,
   Type,
   TypeArgument,
   TypeContainer,
   TypeDeclaration,
   TypeParameter,
-  Wildcard,
+  Wildcard
 } from "./Project";
 import { PrimitiveType } from "./PrimitiveType";
 
@@ -161,11 +164,11 @@ function parseFile(source: string): CompilationUnit {
     }
   }
 
-  function addInterfaces(parent?: TypeDeclaration, ctx?: TypeListContext) {
+  function addInterfaces(parent?: TypeDeclaration, ctx?: TypeListContext[]) {
     if (type != undefined && ctx != undefined) {
-      type.interfaces = ctx
-        .typeType()
-        .map((t) => parseObjectType(parent ?? compilationUnit!, t));
+      type.interfaces = ctx.flatMap((c) =>
+        c.typeType().map((t) => parseObjectType(parent ?? compilationUnit!, t))
+      );
     }
   }
 
@@ -204,7 +207,7 @@ function parseFile(source: string): CompilationUnit {
     visitClassDeclaration(ctx) {
       let previousType = type;
       const parent = previousType ?? compilationUnit!;
-      type = new Class(parent, ctx, ctx.IDENTIFIER().text);
+      type = new Class(parent, ctx, ctx.identifier().text);
       moveModifiers(type);
       moveAnnotations(type);
       parent.types.push(type);
@@ -213,10 +216,35 @@ function parseFile(source: string): CompilationUnit {
       visitor.visitChildren(ctx);
       type = previousType;
     },
+    visitRecordDeclaration(ctx) {
+      let previousType = type;
+      const parent = previousType ?? compilationUnit!;
+      type = new Record(parent, ctx, ctx.identifier().text);
+      moveModifiers(type);
+      moveAnnotations(type);
+      parent.types.push(type);
+      addInterfaces(
+        previousType,
+        ctx.typeList() ? [ctx.typeList()!] : undefined
+      );
+      visitor.visitChildren(ctx);
+      type = previousType;
+    },
+    visitRecordComponent(ctx) {
+      if (type instanceof Record) {
+        const fieldType = parseType(type, ctx.typeType());
+        const name = ctx.identifier().text;
+        const field = new Field(type, ctx, name, fieldType);
+        field.modifiers = [...modifiers];
+        copyAnnotationsTo(annotations, field);
+        annotations = [];
+        type.fields.push(field);
+      }
+    },
     visitAnnotationTypeDeclaration(ctx) {
       let previousType = type;
       const parent = previousType ?? compilationUnit!;
-      type = new AnnotationDeclaration(parent, ctx, ctx.IDENTIFIER().text);
+      type = new AnnotationDeclaration(parent, ctx, ctx.identifier().text);
       moveModifiers(type);
       moveAnnotations(type);
       parent.types.push(type);
@@ -226,7 +254,7 @@ function parseFile(source: string): CompilationUnit {
     visitInterfaceDeclaration(ctx) {
       let previousType = type;
       const parent = previousType ?? compilationUnit!;
-      type = new Interface(parent, ctx, ctx.IDENTIFIER().text);
+      type = new Interface(parent, ctx, ctx.identifier().text);
       moveModifiers(type);
       moveAnnotations(type);
       parent.types.push(type);
@@ -237,22 +265,25 @@ function parseFile(source: string): CompilationUnit {
     visitEnumDeclaration(ctx) {
       let previousType = type;
       const parent = previousType ?? compilationUnit!;
-      type = new Enum(parent, ctx, ctx.IDENTIFIER().text);
+      type = new Enum(parent, ctx, ctx.identifier().text);
       moveModifiers(type);
       moveAnnotations(type);
       parent.types.push(type);
-      addInterfaces(previousType, ctx.typeList());
+      addInterfaces(
+        previousType,
+        ctx.typeList() ? [ctx.typeList()!] : undefined
+      );
       visitor.visitChildren(ctx);
       type = previousType;
     },
     visitEnumConstant(ctx) {
       const parent = type as Enum;
       parent.constants.push(
-        new EnumConstant(parent, ctx, ctx.IDENTIFIER().text)
+        new EnumConstant(parent, ctx, ctx.identifier().text)
       );
     },
     visitTypeParameter(ctx) {
-      typeParameter = new TypeParameter(type!, ctx, ctx.IDENTIFIER().text);
+      typeParameter = new TypeParameter(type!, ctx, ctx.identifier().text);
       visitor.visitChildren(ctx);
       if (type != undefined) {
         type.parameters.push(typeParameter);
@@ -270,7 +301,7 @@ function parseFile(source: string): CompilationUnit {
       annotations.push(parseAnnotation(ctx, container, dummyParent));
     },
     visitMethodDeclaration(ctx) {
-      const methodName = ctx.IDENTIFIER().text;
+      const methodName = ctx.identifier().text;
       const returnType = ctx.typeTypeOrVoid();
       const method = new Method(
         type!,
@@ -287,8 +318,8 @@ function parseFile(source: string): CompilationUnit {
       visitor.visitChildren(ctx);
     },
     visitInterfaceMethodDeclaration(ctx) {
-      const methodName = ctx.IDENTIFIER().text;
-      const returnType = ctx.typeTypeOrVoid()!;
+      const methodName = ctx.interfaceCommonBodyDeclaration().identifier().text;
+      const returnType = ctx.interfaceCommonBodyDeclaration().typeTypeOrVoid()!;
       const method = new Method(
         type!,
         ctx,
@@ -317,7 +348,7 @@ function parseFile(source: string): CompilationUnit {
       if (type instanceof Class) {
         const fieldType = parseType(type, ctx.typeType());
         for (const variable of ctx.variableDeclarators().variableDeclarator()) {
-          const name = variable.variableDeclaratorId().IDENTIFIER().text;
+          const name = variable.variableDeclaratorId().identifier().text;
           const field = new Field(type, ctx, name, fieldType);
           field.modifiers = [...modifiers];
           copyAnnotationsTo(annotations, field);
@@ -346,7 +377,7 @@ function parseFile(source: string): CompilationUnit {
         moveAnnotations(parameter);
         hasParameters.parameters.push(parameter);
       }
-    },
+    }
   });
 
   const ast = parseAst(source);
@@ -370,7 +401,7 @@ function parseAst(source: string) {
       msg
     ) => {
       throw new Error(`syntax error: ${msg}`);
-    },
+    }
   });
   return parser.compilationUnit();
 }
@@ -380,11 +411,12 @@ function parseAnnotation(
   container: TypeContainer,
   parent: Model
 ) {
-  const name = ctx
-    .qualifiedName()
-    .IDENTIFIER()
-    .map((id) => id.text)
-    .join(".");
+  const name =
+    ctx
+      .qualifiedName()
+      ?.identifier()
+      .map((id) => id.text)
+      .join(".") ?? "";
   const annotation = new Annotation(parent, ctx, name);
   if (ctx.elementValue() != undefined) {
     annotation.values.push(
@@ -399,7 +431,7 @@ function parseAnnotation(
           pair.elementValue(),
           container,
           annotation,
-          pair.IDENTIFIER().text
+          pair.identifier().text
         )
       );
     }
@@ -438,7 +470,7 @@ function parseAnnotationValueValue(
           .elementValue()
           .map((v) => parseAnnotationValueValue(v, container, parent))
       );
-    },
+    }
   }).visit(ctx);
   return requireValue(
     result,
@@ -456,15 +488,16 @@ function parseExpression(
       let type: ObjectType | undefined;
       for (let i = 0; i < name.childCount; i++) {
         const child = name.getChild(i);
-        if (child instanceof TerminalNode) {
-          if (child.symbol.type === JavaLexer.IDENTIFIER) {
-            if (type == undefined) {
-              type = new ObjectType(container, child.text);
-            } else {
-              const qualifier = type;
-              type = new ObjectType(container, child.text);
-              type.qualifier = qualifier;
-            }
+        if (
+          child instanceof IdentifierContext ||
+          child instanceof TypeIdentifierContext
+        ) {
+          if (type == undefined) {
+            type = new ObjectType(container, child.text);
+          } else {
+            const qualifier = type;
+            type = new ObjectType(container, child.text);
+            type.qualifier = qualifier;
           }
         } else if (child instanceof TypeArgumentsOrDiamondContext) {
           type!.arguments =
@@ -481,7 +514,7 @@ function parseExpression(
     }
   }
 
-  function parse(ctx: ParserRuleContext): Expression | Expression[] {
+  function parse(ctx: ParseTree): Expression | Expression[] {
     if (ctx instanceof LiteralContext) {
       if (ctx.integerLiteral() != undefined) {
         return new Literal(Number(ctx.text.replace(/(_|[lL]$)/g, "")));
@@ -504,25 +537,27 @@ function parseExpression(
         ?.expression()
         .map((e) => parseExpression(e, container));
       return new ConstructorInvocation(type, args);
+    } else if (ctx instanceof IdentifierContext) {
+      return new Name(ctx.text);
     } else if (ctx instanceof TerminalNode) {
       if (ctx.symbol.type === JavaLexer.IDENTIFIER) {
         return new Name(ctx.text);
       } else {
         return new Token(ctx.text);
       }
-    } else {
+    } else if (ctx instanceof ParserRuleContext) {
       return new Unknown(
         ctx.start.inputStream!.getText(
           new Interval(ctx.start.startIndex, ctx.stop?.stopIndex ?? -1)
         )
       );
+    } else {
+      throw new Error("unexpected AST node: " + ctx.constructor.name);
     }
   }
 
   function parseChildren(ctx: ParserRuleContext): Expression[] {
-    return (ctx.children ?? [])
-      .map((child) => parse(child as ParserRuleContext))
-      .flat();
+    return (ctx.children ?? []).map((child) => parse(child)).flat();
   }
 
   return simplifyExpressions(parseChildren(ctx));
@@ -618,15 +653,16 @@ function parseType(
       let type: ObjectType | undefined;
       for (let i = 0; i < ctx.childCount; i++) {
         const child = ctx.getChild(i);
-        if (child instanceof TerminalNode) {
-          if (child.symbol.type === JavaLexer.IDENTIFIER) {
-            if (type == undefined) {
-              type = new ObjectType(container, child.text);
-            } else {
-              const qualifier = type;
-              type = new ObjectType(container, child.text);
-              type.qualifier = qualifier;
-            }
+        if (
+          child instanceof IdentifierContext ||
+          child instanceof TypeIdentifierContext
+        ) {
+          if (type == undefined) {
+            type = new ObjectType(container, child.text);
+          } else {
+            const qualifier = type;
+            type = new ObjectType(container, child.text);
+            type.qualifier = qualifier;
           }
         } else if (child instanceof TypeArgumentsContext) {
           type!.arguments = child
@@ -641,13 +677,8 @@ function parseType(
     },
     visitAnnotation(ctx) {
       return undefined;
-    },
+    }
   });
-  visitor.visitErrorNode = (node) => {
-    console.error(node);
-    throw new Error("xx");
-    return undefined;
-  };
   const result = visitor.visit(ctx);
   return requireValue(result, () => "could not parse type: " + ctx.text);
 }
@@ -703,12 +734,12 @@ function parseTypeArgument(
     if (ctx.EXTENDS() != undefined) {
       ref.constraint = {
         kind: "extends",
-        type: parseObjectType(container, ctx.typeType()!),
+        type: parseObjectType(container, ctx.typeType()!)
       };
     } else if (ctx.SUPER() != undefined) {
       ref.constraint = {
         kind: "super",
-        type: parseObjectType(container, ctx.typeType()!),
+        type: parseObjectType(container, ctx.typeType()!)
       };
     }
     return ref;
