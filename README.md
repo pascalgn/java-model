@@ -22,7 +22,7 @@ import { readFileSync } from "node:fs";
 import { parse } from "java-model";
 
 const project = parse({
-    files: inputFiles,
+    files: ["input.java"],
     read: (file) => readFileSync(file, "utf8")
 });
 
