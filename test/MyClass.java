@@ -30,7 +30,7 @@ abstract class MyClass {
 
     abstract InnerClass1<String>.InnerClass2<Number> method3();
 
-    public record Record1(int i, String s) {
+    public record Record1(int i, @Annotation3 String s) {
     }
 
     public Record1 method4() {

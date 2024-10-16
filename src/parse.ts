@@ -232,10 +232,12 @@ function parseFile(source: string): CompilationUnit {
     },
     visitRecordComponent(ctx) {
       if (type instanceof Record) {
-        const fieldType = parseType(type, ctx.typeType());
+        const tt = ctx.typeType();
+        const fieldType = parseType(type, tt);
         const name = ctx.identifier().text;
         const field = new Field(type, ctx, name, fieldType);
         field.modifiers = [...modifiers];
+        tt.annotation().forEach((a) => visitor.visit(a));
         copyAnnotationsTo(annotations, field);
         annotations = [];
         type.fields.push(field);

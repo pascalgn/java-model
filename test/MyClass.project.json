@@ -316,7 +316,12 @@
             {
               "name": "s",
               "modifiers": [],
-              "annotations": [],
+              "annotations": [
+                {
+                  "qualifiedName": "Annotation3",
+                  "values": []
+                }
+              ],
               "type": {
                 "name": "String",
                 "arguments": []
